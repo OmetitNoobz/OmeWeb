@@ -1,0 +1,419 @@
+/**
+ * OmeRyth Web - Mobile & Tablet Responsive Stylesheet
+ * Optimisations tactiles, adaptation smartphone complète (Portrait & Paysage),
+ * Mobile Dubbing Pad, Drawer menu et commandes de transport adaptées.
+ */
+
+/* Par défaut sur grand écran : barre mobile masquée, barre desktop visible */
+.mobile-toolbar {
+  display: none;
+}
+
+.desktop-toolbar {
+  display: flex;
+}
+
+.desktop-only {
+  display: flex;
+}
+
+/* --- Mobile Dubbing Pad (Barre d'outils tactiles rapides) --- */
+.mobile-dubbing-pad {
+  display: none;
+  background-color: #16161b;
+  border-top: 1px solid var(--border-color);
+  padding: 4px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  gap: 8px;
+  flex-shrink: 0;
+  z-index: 10;
+  scrollbar-width: none;
+}
+
+.mobile-dubbing-pad::-webkit-scrollbar {
+  display: none;
+}
+
+.dub-pad-btn {
+  background-color: #24242d;
+  border: 1px solid #363644;
+  color: #f0f0f5;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  height: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+.dub-pad-btn:active {
+  background-color: #3b3b4a;
+  transform: scale(0.95);
+}
+
+.dub-pad-btn[data-action="start"] {
+  border-color: #50dc78;
+  color: #50dc78;
+  background-color: rgba(80, 220, 120, 0.12);
+}
+
+.dub-pad-btn[data-action="end"] {
+  border-color: #ff3c3c;
+  color: #ff3c3c;
+  background-color: rgba(255, 60, 60, 0.12);
+}
+
+.dub-pad-btn[data-action="inner"] {
+  border-color: #ffc832;
+  color: #ffc832;
+  background-color: rgba(255, 200, 50, 0.12);
+}
+
+.dub-pad-btn[data-action="plan"] {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  background-color: rgba(250, 204, 21, 0.12);
+}
+
+.dub-pad-btn[data-action="fvr"] {
+  border-color: #00beff;
+  color: #00beff;
+  background-color: rgba(0, 190, 255, 0.12);
+}
+
+.dub-pad-btn[data-action="mpb"] {
+  border-color: #ff5a96;
+  color: #ff5a96;
+  background-color: rgba(255, 90, 150, 0.12);
+}
+
+.dub-pad-btn[data-action="open_a"] {
+  border-color: #ffbe00;
+  color: #ffbe00;
+  background-color: rgba(255, 190, 0, 0.12);
+}
+
+.dub-pad-btn[data-action="neutral"] {
+  border-color: #b496e6;
+  color: #b496e6;
+  background-color: rgba(180, 150, 230, 0.12);
+}
+
+/* --- Adaptations Mobile Smartphone (< 768px) --- */
+@media (max-width: 768px) {
+  body {
+    height: 100vh;
+    height: 100dvh;
+    min-height: -webkit-fill-available;
+    width: 100vw;
+    padding: 0;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .header {
+    padding: 0 10px;
+    padding-top: env(safe-area-inset-top, 0px);
+    height: calc(46px + env(safe-area-inset-top, 0px));
+    flex-shrink: 0;
+  }
+
+  .brand-title {
+    font-size: 15px;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  .desktop-toolbar {
+    display: none !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-toolbar .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 34px;
+  }
+
+  /* Espace principal dynamique sans débordement */
+  .main-workspace {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .video-section {
+    flex: 0 0 auto;
+    height: 25vh;
+    min-height: 80px;
+    max-height: 30vh;
+  }
+
+  .resizer-bar {
+    display: none; /* Proportions fixes confortables sur mobile */
+  }
+
+  .timeline-section {
+    flex: 1 1 0;
+    min-height: 100px;
+    height: auto;
+    overflow: hidden;
+  }
+
+  /* Barre tactile de signes (Dubbing Pad) */
+  .mobile-dubbing-pad {
+    display: flex;
+    align-items: center;
+    height: 44px;
+    min-height: 44px;
+    padding: 4px 8px;
+    gap: 6px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .dub-pad-btn {
+    height: 34px;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 6px;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  /* Barre de transport inférieure - Toujours visible et ergonomique */
+  .transport-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: calc(48px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(48px + env(safe-area-inset-bottom, 0px));
+    padding: 0 8px env(safe-area-inset-bottom, 0px) 8px;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    z-index: 10;
+  }
+
+  .transport-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .timecode-group {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .timecode-box {
+    font-size: 12px;
+    min-width: 74px;
+    padding: 4px 6px;
+    letter-spacing: 0.3px;
+    text-align: center;
+  }
+
+  .select-control {
+    font-size: 11px;
+    padding: 3px 2px;
+  }
+
+  .playback-group {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .btn-step,
+  .btn-secondary {
+    padding: 4px 6px;
+    font-size: 11px;
+    min-width: 32px;
+    min-height: 34px;
+    height: 34px;
+  }
+
+  .btn-play-main {
+    padding: 4px 10px;
+    font-size: 12px;
+    min-width: 38px;
+    min-height: 34px;
+    height: 34px;
+  }
+
+  /* Modales adaptées au smartphone */
+  .modal-content {
+    width: 94%;
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .form-input {
+    font-size: 16px; /* Empêche le zoom auto gênant d'iOS Safari */
+    min-height: 44px;
+  }
+
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  /* Menu contextuel mobile */
+  .custom-context-menu {
+    width: 90vw;
+    max-width: 320px;
+    padding: 8px;
+  }
+
+  .cmenu-item {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+}
+
+/* --- Écrans très étroits (< 520px) : étiquettes compactes pour garantir 100% de visibilité --- */
+@media (max-width: 520px) {
+  .lbl-full {
+    display: none;
+  }
+
+  .lbl-short {
+    display: inline;
+  }
+
+  .play-text {
+    display: none;
+  }
+
+  .transport-bar {
+    padding: 0 4px env(safe-area-inset-bottom, 0px) 4px;
+    gap: 3px;
+  }
+
+  .timecode-box {
+    font-size: 11px;
+    min-width: 68px;
+    padding: 4px 4px;
+  }
+
+  .btn-step,
+  .btn-secondary {
+    padding: 4px 5px;
+    font-size: 10px;
+  }
+
+  .toast {
+    right: 12px;
+    left: 12px;
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 48px);
+    text-align: center;
+  }
+}
+
+/* --- Mode Paysage sur Smartphone (Orientation Landscape) --- */
+@media (max-height: 520px) and (orientation: landscape) {
+  .header {
+    height: calc(36px + env(safe-area-inset-top, 0px));
+    padding: 0 10px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .main-workspace {
+    flex-direction: row;
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+  }
+
+  .video-section {
+    width: 44%;
+    height: 100%;
+    min-height: unset;
+    max-height: unset;
+    border-right: 1px solid var(--border-color);
+  }
+
+  .resizer-bar {
+    display: none;
+  }
+
+  .timeline-section {
+    width: 56%;
+    height: 100%;
+    min-height: unset;
+  }
+
+  /* Afficher aussi la barre de signes en paysage en version compacte */
+  .mobile-dubbing-pad {
+    display: flex;
+    height: 36px;
+    min-height: 36px;
+    padding: 2px 6px;
+    gap: 4px;
+  }
+
+  .dub-pad-btn {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .transport-bar {
+    height: calc(38px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(38px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .btn-step,
+  .btn-secondary,
+  .btn-play-main {
+    min-height: 28px;
+    height: 28px;
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .timecode-box {
+    font-size: 10px;
+    min-width: 65px;
+    padding: 2px 4px;
+  }
+}

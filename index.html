@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#18181c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="OmeRyth Web - Studio professionnel de doublage et bande rythmo synchronisée 60 FPS">
+  <title>OmeRyth Web - Studio de Doublage & Bande Rythmo</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/mobile.css">
+</head>
+<body>
+
+  <!-- Barre supérieure / Header -->
+  <header class="header">
+    <div class="brand">
+      <img class="brand-logo" src="assets/images/logo-dark.png" alt="OmeRyth Logo">
+      <span class="brand-title">Ome<span class="brand-accent">Ryth</span></span>
+      <span class="brand-tag">WEB STUDIO</span>
+    </div>
+
+    <!-- Groupes d'outils Desktop -->
+    <div class="toolbar-group desktop-toolbar">
+      <button class="btn btn-sm" id="btnNew" title="Nouveau projet">📄 Nouveau</button>
+      <button class="btn btn-sm" id="btnOpen" title="Ouvrir un projet .rythmo">📂 Ouvrir</button>
+      <button class="btn btn-sm btn-primary" id="btnSave" title="Sauvegarder le projet (Ctrl+S)">💾 Sauvegarder</button>
+      <button class="btn btn-sm" id="btnLoadMedia" title="Charger un fichier vidéo ou audio local">🎬 Média</button>
+      <button class="btn btn-sm btn-accent-transcribe" id="btnTranscribe" title="Transcription IA (Non disponible pour l'instant)">🎙️ Transcrire</button>
+      <button class="btn btn-sm" id="btnRoles" title="Gestion des personnages et couleurs">🎭 Rôles</button>
+      <button class="btn btn-sm" id="btnExportSrt" title="Exporter les répliques en sous-titres SRT">📝 SRT</button>
+      <button class="btn btn-sm" id="btnDemo" title="Charger un projet d'exemple">⚡ Démo</button>
+    </div>
+
+    <div class="toolbar-group desktop-toolbar">
+      <button class="btn btn-sm" id="btnAddBand" title="Ajouter une piste / bande">+</button>
+      <button class="btn btn-sm" id="btnRemoveBand" title="Supprimer la dernière piste">-</button>
+      <button class="btn btn-sm" id="btnZoomIn" title="Zoom avant (Ctrl + Molette)">🔍+</button>
+      <button class="btn btn-sm" id="btnZoomOut" title="Zoom arrière (Ctrl + Molette)">🔍-</button>
+      <button class="btn btn-sm" id="btnWaveform" title="Afficher/Masquer la forme d'onde audio (Ctrl+W)">〰️ Waveform</button>
+      <button class="btn btn-sm" id="btnSigns" title="Afficher/Masquer les repères de doublage">🏷️ Signes</button>
+      <button class="btn btn-sm" id="btnHelp" title="Raccourcis clavier et aide">❓</button>
+    </div>
+
+    <!-- Groupes d'outils Mobile -->
+    <div class="toolbar-group mobile-toolbar">
+      <button class="btn btn-sm btn-primary" id="btnMobileMedia" title="Charger un média">🎬 Média</button>
+      <button class="btn btn-sm btn-accent-transcribe" id="btnMobileTranscribe" title="Transcription IA (Non disponible pour l'instant)">🎙️</button>
+      <button class="btn btn-sm" id="btnMobileSave" title="Sauvegarder">💾</button>
+      <button class="btn btn-sm" id="btnMobileMenu" title="Menu des options">☰</button>
+    </div>
+
+    <!-- Inputs fichiers masqués -->
+    <input type="file" id="fileInputProject" accept=".rythmo,.json" style="display: none;">
+    <input type="file" id="fileInputMedia" accept="video/*,audio/*,.mkv,.mp4,.webm,.mp3,.wav" style="display: none;">
+  </header>
+
+  <!-- Espace principal de travail -->
+  <main class="main-workspace">
+    <!-- Zone Lecteur Vidéo -->
+    <section class="video-section">
+      <div class="video-container">
+        <video id="videoPlayer" playsinline webkit-playsinline preload="auto"></video>
+        <div class="video-placeholder" id="videoPlaceholder">
+          <div class="icon">🎬</div>
+          <p>Glissez-déposez une vidéo ou cliquez sur <strong>Média</strong> pour commencer</p>
+          <button class="btn btn-sm btn-primary" onclick="document.getElementById('fileInputMedia').click()">Charger une vidéo locale</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Séparateur redimensionnable -->
+    <div class="resizer-bar" id="resizerBar">
+      <div class="resizer-handle"></div>
+    </div>
+
+    <!-- Zone Bande Rythmo (Canvas 60 FPS) -->
+    <section class="timeline-section">
+      <canvas id="timelineCanvas"></canvas>
+    </section>
+  </main>
+
+  <!-- Mobile Dubbing Pad (Barre tactile d'insertion rapide pour smartphones & tablettes) -->
+  <nav class="mobile-dubbing-pad">
+    <button class="dub-pad-btn" data-action="start" title="Début de réplique (▶)">▶ Start</button>
+    <button class="dub-pad-btn" data-action="inner" title="Séparateur interne (|)">| Inner</button>
+    <button class="dub-pad-btn" data-action="end" title="Fin de réplique (◀)">◀ End</button>
+    <button class="dub-pad-btn" data-action="plan" title="Repère de plan (Numpad 1)">🟡 Plan</button>
+    <button class="dub-pad-btn" data-action="fvr" title="Dentale F, V, R (Numpad 2)">🦷 FVR</button>
+    <button class="dub-pad-btn" data-action="mpb" title="Labiale M, P, B (Numpad 8)">👄 MPB</button>
+    <button class="dub-pad-btn" data-action="open_a" title="Ouverture A (Numpad 5)">😮 A</button>
+    <button class="dub-pad-btn" data-action="neutral" title="Neutre (Numpad 3)">😐 Neutre</button>
+  </nav>
+
+  <!-- Barre de transport (Footer) -->
+  <footer class="transport-bar">
+    <div class="transport-controls timecode-group">
+      <div class="timecode-box" id="timecodeDisplay">00:00:00:00</div>
+      <select class="select-control" id="selectSpeed" title="Vitesse de lecture">
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1.0" selected>1.0x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2.0">2.0x</option>
+      </select>
+    </div>
+
+    <div class="transport-controls playback-group">
+      <button class="btn btn-step" id="btnStepPrev" title="Reculer de 0.1s (Flèche Gauche)"><span class="lbl-full">◀ 0.1s</span><span class="lbl-short">◀.1s</span></button>
+      <button class="btn btn-secondary" id="btnPrev" title="Recul de 0.5s"><span class="lbl-full">◀◀ 0.5s</span><span class="lbl-short">◀◀.5s</span></button>
+      <button class="btn btn-primary btn-play-main" id="btnPlay" title="Lecture / Pause (Espace)"><span class="play-icon">▶</span><span class="play-text"> Lecture</span></button>
+      <button class="btn btn-secondary" id="btnNext" title="Avance de 0.5s"><span class="lbl-full">0.5s ▶▶</span><span class="lbl-short">.5s ▶▶</span></button>
+      <button class="btn btn-step" id="btnStepNext" title="Avancer de 0.1s (Flèche Droite)"><span class="lbl-full">0.1s ▶</span><span class="lbl-short">.1s ▶</span></button>
+      <button class="btn btn-frame desktop-only" id="btnFramePrev" title="Image précédente (Shift + Flèche Gauche)">|◀</button>
+      <button class="btn btn-frame desktop-only" id="btnFrameNext" title="Image suivante (Shift + Flèche Droite)">▶|</button>
+    </div>
+
+    <div class="transport-controls extra-group desktop-only">
+      <div class="volume-control">
+        <span>🔊</span>
+        <input type="range" class="volume-slider" id="sliderVolume" min="0" max="100" value="80">
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal Saisie & Édition de Réplique (START & Clic sur texte) -->
+  <div class="modal-backdrop modal" id="textModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">💬</span>
+          <h3 id="textModalTitle">Édition de réplique</h3>
+        </div>
+        <button class="modal-close" id="btnCloseTextModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Personnage / Rôle</label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="modalRoleBadge" style="width: 14px; height: 14px; border-radius: 50%; background-color: #4ECDC4; border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;"></span>
+            <select class="form-input" id="modalRoleSelect" style="flex: 1;"></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Texte de la réplique (modification dynamique)</label>
+          <input type="text" class="form-input" id="modalTextInput" placeholder="Tapez le texte de la réplique ici..." autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelTextModal">Annuler</button>
+        <button class="btn btn-primary" id="btnSaveTextModal">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+  <!-- Modal Transcription Vocale IA (Whisper) -->
+  <div class="modal-backdrop modal" id="transcribeModal">
+    <div class="modal-content transcribe-modal-content">
+      <div class="modal-header">
+        <div class="transcribe-header-title">
+          <span style="font-size: 20px;">🎙️</span>
+          <h3>Transcription Vocale IA (Whisper)</h3>
+        </div>
+        <button class="modal-close" id="btnCloseTranscribeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- État du média sélectionné -->
+        <div class="transcribe-status-card" id="transcribeMediaCard">
+          <div class="media-info-icon">🎬</div>
+          <div class="media-info-details">
+            <strong id="transcribeMediaTitle">Aucun média chargé</strong>
+            <span id="transcribeMediaSub">Veuillez charger une vidéo ou un fichier audio pour transcrire.</span>
+          </div>
+          <button class="btn btn-sm btn-secondary" id="btnSelectMediaInModal">Choisir...</button>
+        </div>
+
+        <!-- Options de transcription -->
+        <div class="transcribe-form-grid" id="transcribeFormGrid">
+          <div class="form-group">
+            <label>Langue audio</label>
+            <select class="form-input" id="transcribeLang">
+              <option value="fr" selected>Français (Recommandé)</option>
+              <option value="en">Anglais</option>
+              <option value="auto">Auto-détection de langue</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Modèle Whisper IA</label>
+            <select class="form-input" id="transcribeModel">
+              <option value="tiny">Tiny (Ultra-rapide)</option>
+              <option value="base">Base (Rapide)</option>
+              <option value="small" selected>Small (Recommandé - Équilibré)</option>
+              <option value="medium">Medium (Haute fidélité)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Personnages (Diarisation vocale)</label>
+            <select class="form-input" id="transcribeSpeakers">
+              <option value="0" selected>Auto-détection (Tous les personnages)</option>
+              <option value="1">1 seul personnage</option>
+              <option value="2">2 personnages</option>
+              <option value="3">3 personnages</option>
+              <option value="4">4 personnages</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Piste cible de destination</label>
+            <select class="form-input" id="transcribeTargetBand">
+              <option value="0" selected>Bande 1 (Principale)</option>
+              <option value="1">Bande 2</option>
+              <option value="2">Bande 3</option>
+              <option value="3">Bande 4</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Zone de progression en direct -->
+        <div class="transcribe-progress-area" id="transcribeProgressArea" style="display: none;">
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="transcribeProgressBar" style="width: 0%;"></div>
+          </div>
+          <div class="progress-labels">
+            <span class="progress-msg" id="transcribeProgressMsg">Préparation de la transcription...</span>
+            <span class="progress-pct" id="transcribeProgressPct">0%</span>
+          </div>
+
+          <div class="live-feed-box">
+            <div class="live-feed-title">Répliques détectées en direct :</div>
+            <div class="live-feed-scroll" id="transcribeLiveScroll"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelTranscribe">Fermer</button>
+        <button class="btn btn-primary btn-start-transcribe" id="btnStartTranscribe">⚡ Lancer la transcription IA</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Gestionnaire des Rôles -->
+  <div class="modal-backdrop modal" id="rolesModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Personnages & Couleurs</h3>
+        <button class="modal-close" onclick="document.getElementById('rolesModal').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="roles-list" id="rolesList"></div>
+        <button class="btn btn-sm" id="btnAddRole" style="align-self: flex-start;">+ Ajouter un personnage</button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="document.getElementById('rolesModal').classList.remove('active')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Aide & Raccourcis Clavier -->
+  <div class="modal-backdrop modal" id="helpModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Raccourcis Clavier & Guide</h3>
+        <button class="modal-close" onclick="document.getElementById('helpModal').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-grid">
+          <div class="shortcut-item"><span>Lecture / Pause</span><kbd>Espace</kbd></div>
+          <div class="shortcut-item"><span>Recul / Avance 0.1s</span><kbd>←</kbd> / <kbd>→</kbd></div>
+          <div class="shortcut-item"><span>Recul / Avance 0.5s</span><kbd>Alt + ← / →</kbd></div>
+          <div class="shortcut-item"><span>Image par image</span><kbd>Shift + ← / →</kbd></div>
+          <div class="shortcut-item"><span>Transport doublage</span><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></div>
+          <div class="shortcut-item"><span>Repère de plan</span><kbd>Pavé num 1</kbd></div>
+          <div class="shortcut-item"><span>Dentale (F, V, R)</span><kbd>Pavé num 2</kbd></div>
+          <div class="shortcut-item"><span>Consonne Neutre</span><kbd>Pavé num 3</kbd></div>
+          <div class="shortcut-item"><span>Ouverture A</span><kbd>Pavé num 5</kbd></div>
+          <div class="shortcut-item"><span>Labiale (M, P, B)</span><kbd>Pavé num 8</kbd></div>
+          <div class="shortcut-item"><span>Séparateur Début (START)</span><kbd>S</kbd></div>
+          <div class="shortcut-item"><span>Séparateur Fin (END)</span><kbd>E</kbd></div>
+          <div class="shortcut-item"><span>Séparateur Interne (INNER)</span><kbd>I</kbd></div>
+          <div class="shortcut-item"><span>Supprimer réplique</span><kbd>Clic droit sur Début</kbd></div>
+          <div class="shortcut-item"><span>Annuler / Rétablir</span><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></div>
+          <div class="shortcut-item"><span>Waveform audio</span><kbd>Ctrl+W</kbd></div>
+          <div class="shortcut-item"><span>Sauvegarder projet</span><kbd>Ctrl+S</kbd></div>
+          <div class="shortcut-item"><span>Éditer texte</span><kbd>Double-clic</kbd></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="document.getElementById('helpModal').classList.remove('active')">Compris</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu contextuel flottant (Clic droit sur desktop ou appui long sur smartphone) -->
+  <div class="custom-context-menu" id="contextMenu">
+    <div class="cmenu-header" id="cmenuHeader">Options</div>
+    <div class="cmenu-item danger" id="cmenuDeletePhrase">
+      <span class="cmenu-icon">🗑️</span>
+      <span class="cmenu-text">Supprimer la réplique entière</span>
+    </div>
+    <div class="cmenu-item" id="cmenuEditText">
+      <span class="cmenu-icon">✏️</span>
+      <span class="cmenu-text">Modifier la réplique</span>
+    </div>
+    <div class="cmenu-item danger" id="cmenuDeleteSep">
+      <span class="cmenu-icon">❌</span>
+      <span class="cmenu-text">Supprimer ce repère</span>
+    </div>
+    <div class="cmenu-item danger" id="cmenuDeletePlan">
+      <span class="cmenu-icon">🗑️</span>
+      <span class="cmenu-text">Supprimer ce repère de plan</span>
+    </div>
+    <div class="cmenu-divider" id="cmenuDivider"></div>
+    <div class="cmenu-item" id="cmenuAddStart">
+      <span class="cmenu-icon" style="color: #50dc78;">▶</span>
+      <span class="cmenu-text">Poser repère Début (START)</span>
+    </div>
+    <div class="cmenu-item" id="cmenuAddEnd">
+      <span class="cmenu-icon" style="color: #ff3c3c;">◀</span>
+      <span class="cmenu-text">Poser repère Fin (END)</span>
+    </div>
+    <div class="cmenu-item" id="cmenuAddInner">
+      <span class="cmenu-icon" style="color: #ffc832;">|</span>
+      <span class="cmenu-text">Poser séparateur interne (INNER)</span>
+    </div>
+    <div class="cmenu-item" id="cmenuAddPlan">
+      <span class="cmenu-icon" style="color: #facc15;">🟡</span>
+      <span class="cmenu-text">Poser repère de plan</span>
+    </div>
+  </div>
+
+  <!-- Tiroir / Drawer Mobile pour accéder à toutes les options sur smartphone -->
+  <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop">
+    <div class="mobile-drawer" id="mobileDrawer">
+      <div class="mobile-drawer-header">
+        <div class="brand">
+          <div class="brand-icon">Ω</div>
+          <span>Menu Studio</span>
+        </div>
+        <button class="modal-close" id="btnCloseMobileDrawer">&times;</button>
+      </div>
+      <div class="mobile-drawer-body">
+        <div class="drawer-section-title">PROJET</div>
+        <button class="drawer-item" id="mBtnNew"><span class="drawer-icon">📄</span> Nouveau projet vierge</button>
+        <button class="drawer-item" id="mBtnOpen"><span class="drawer-icon">📂</span> Ouvrir projet (.rythmo)</button>
+        <button class="drawer-item" id="mBtnSave"><span class="drawer-icon">💾</span> Sauvegarder projet</button>
+        <button class="drawer-item" id="mBtnMedia"><span class="drawer-icon">🎬</span> Charger Média (Vidéo / Audio)</button>
+        <button class="drawer-item highlight-transcribe" id="mBtnTranscribe"><span class="drawer-icon">🎙️</span> Transcription Vocale IA (Bientôt disponible)</button>
+        <button class="drawer-item" id="mBtnExportSrt"><span class="drawer-icon">📝</span> Exporter en sous-titres SRT</button>
+        <button class="drawer-item" id="mBtnDemo"><span class="drawer-icon">⚡</span> Charger projet Démo</button>
+
+        <div class="drawer-section-title">PISTES & AFFICHAGE</div>
+        <button class="drawer-item" id="mBtnRoles"><span class="drawer-icon">🎭</span> Personnages & Couleurs</button>
+        <button class="drawer-item" id="mBtnAddBand"><span class="drawer-icon">➕</span> Ajouter une bande</button>
+        <button class="drawer-item" id="mBtnRemoveBand"><span class="drawer-icon">➖</span> Supprimer la dernière bande</button>
+        <button class="drawer-item" id="mBtnWaveform"><span class="drawer-icon">〰️</span> Afficher / Masquer Waveform</button>
+        <button class="drawer-item" id="mBtnSigns"><span class="drawer-icon">🏷️</span> Afficher / Masquer Signes</button>
+        <div class="drawer-zoom-row">
+          <button class="btn" id="mBtnZoomOut">🔍- Zoom arrière</button>
+          <button class="btn" id="mBtnZoomIn">🔍+ Zoom avant</button>
+        </div>
+
+        <div class="drawer-section-title">AIDE</div>
+        <button class="drawer-item" id="mBtnHelp"><span class="drawer-icon">❓</span> Guide & Raccourcis</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div class="toast" id="toast">Notification</div>
+
+  <!-- Point d'entrée JavaScript -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

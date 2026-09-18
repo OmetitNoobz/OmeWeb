@@ -1,0 +1,123 @@
+{
+  "version": "RHYTHMO_V5",
+  "video": null,
+  "bandCount": 4,
+  "pixelsPerSecond": 80.0,
+  "zoomLevelIndex": 0,
+  "roles": [
+    {
+      "name": "Narrateur",
+      "color": -11612732
+    },
+    {
+      "name": "Personnage 1",
+      "color": -38005
+    },
+    {
+      "name": "Personnage 2",
+      "color": -11928
+    },
+    {
+      "name": "Personnage 3",
+      "color": -6263595
+    }
+  ],
+  "texts": [
+    {
+      "text": "Bonjour et bienvenue sur OmeRyth Web !",
+      "x": 80,
+      "band": 0,
+      "role": "Narrateur"
+    },
+    {
+      "text": "Tout fonctionne directement depuis votre navigateur !",
+      "x": 304,
+      "band": 1,
+      "role": "Personnage 1"
+    },
+    {
+      "text": "Compatible ordinateur, tablette et smartphone.",
+      "x": 512,
+      "band": 2,
+      "role": "Personnage 2"
+    }
+  ],
+  "separators": [
+    {
+      "band": 0,
+      "x": 80,
+      "type": "START",
+      "splitIndex": -1,
+      "signType": "DEFAULT",
+      "rawDetxType": ""
+    },
+    {
+      "band": 0,
+      "x": 144,
+      "type": "INNER",
+      "splitIndex": 21,
+      "signType": "OPEN_A",
+      "rawDetxType": ""
+    },
+    {
+      "band": 0,
+      "x": 256,
+      "type": "END",
+      "splitIndex": -1,
+      "signType": "DEFAULT",
+      "rawDetxType": ""
+    },
+    {
+      "band": 1,
+      "x": 304,
+      "type": "START",
+      "splitIndex": -1,
+      "signType": "DEFAULT",
+      "rawDetxType": ""
+    },
+    {
+      "band": 1,
+      "x": 376,
+      "type": "INNER",
+      "splitIndex": 28,
+      "signType": "FVR",
+      "rawDetxType": ""
+    },
+    {
+      "band": 1,
+      "x": 464,
+      "type": "END",
+      "splitIndex": -1,
+      "signType": "DEFAULT",
+      "rawDetxType": ""
+    },
+    {
+      "band": 2,
+      "x": 512,
+      "type": "START",
+      "splitIndex": -1,
+      "signType": "DEFAULT",
+      "rawDetxType": ""
+    },
+    {
+      "band": 2,
+      "x": 584,
+      "type": "INNER",
+      "splitIndex": 22,
+      "signType": "MPB",
+      "rawDetxType": ""
+    },
+    {
+      "band": 2,
+      "x": 688,
+      "type": "END",
+      "splitIndex": -1,
+      "signType": "DEFAULT",
+      "rawDetxType": ""
+    }
+  ],
+  "planMarkers": [
+    280,
+    488
+  ]
+}
