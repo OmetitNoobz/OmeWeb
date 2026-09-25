@@ -29,9 +29,6 @@
       <button class="btn btn-sm btn-primary" id="btnSave" title="Sauvegarder le projet (Ctrl+S)">💾 Sauvegarder</button>
       <button class="btn btn-sm btn-accent-transcribe" id="btnTranscribe" title="Transcription IA (Non disponible pour l'instant)">🎙️ Transcrire</button>
       <button class="btn btn-sm" id="btnRoles" title="Gestion des personnages et couleurs">🎭 Rôles</button>
-      <button class="btn btn-sm" id="btnExportSrt" title="Exporter les répliques en sous-titres SRT">📝 SRT</button>
-      <button class="btn btn-sm" id="btnDemo" title="Charger un projet d'exemple">⚡ Démo</button>
-      <button class="btn btn-sm btn-mode-toggle active-mode-pc" id="btnInputMode" title="Mode de saisie : PC (direct sur bande) ou Mobile (modale)">💻 Mode PC</button>
     </div>
 
     <div class="toolbar-group desktop-toolbar">
@@ -42,6 +39,7 @@
       <button class="btn btn-sm" id="btnWaveform" title="Afficher/Masquer la forme d'onde audio (Ctrl+W)">〰️ Waveform</button>
       <button class="btn btn-sm" id="btnSigns" title="Afficher/Masquer les repères de doublage">🏷️ Signes</button>
       <button class="btn btn-sm" id="btnHelp" title="Raccourcis clavier et aide">❓</button>
+      <button class="btn btn-sm" id="btnCookies" title="Gestion des cookies et sauvegarde locale">🍪</button>
     </div>
 
     <!-- Groupes d'outils Mobile -->
@@ -155,7 +153,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn" id="btnCancelTextModal">Annuler</button>
-        <button class="btn btn-primary" id="btnSaveTextModal">Enregistrer</button>
+        <button class="btn btn-primary" id="btnSaveTextModal">✓ Confirmer</button>
       </div>
     </div>
   </div>
@@ -377,9 +375,6 @@
         <button class="drawer-item" id="mBtnOpen"><span class="drawer-icon">📂</span> Ouvrir projet (.rythmo)</button>
         <button class="drawer-item" id="mBtnSave"><span class="drawer-icon">💾</span> Sauvegarder projet</button>
         <button class="drawer-item highlight-transcribe" id="mBtnTranscribe"><span class="drawer-icon">🎙️</span> Transcription Vocale IA (Bientôt disponible)</button>
-        <button class="drawer-item" id="mBtnExportSrt"><span class="drawer-icon">📝</span> Exporter en sous-titres SRT</button>
-        <button class="drawer-item" id="mBtnDemo"><span class="drawer-icon">⚡</span> Charger projet Démo</button>
-
         <div class="drawer-section-title">PISTES & AFFICHAGE</div>
         <button class="drawer-item" id="mBtnRoles"><span class="drawer-icon">🎭</span> Personnages & Couleurs</button>
         <button class="drawer-item" id="mBtnAddBand"><span class="drawer-icon">➕</span> Ajouter une bande</button>
@@ -391,11 +386,28 @@
           <button class="btn" id="mBtnZoomIn">🔍+ Zoom avant</button>
         </div>
 
-        <div class="drawer-section-title">MODE DE SAISIE</div>
-        <button class="drawer-item" id="mBtnInputMode"><span class="drawer-icon">💻</span> Mode : Direct sur bande (PC)</button>
-
-        <div class="drawer-section-title">AIDE</div>
+        <div class="drawer-section-title">AIDE & CONFIDENTIALITÉ</div>
         <button class="drawer-item" id="mBtnHelp"><span class="drawer-icon">❓</span> Guide & Raccourcis</button>
+        <button class="drawer-item" id="mBtnCookies"><span class="drawer-icon">🍪</span> Préférences des cookies</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bannière Popup Cookies & Sauvegarde Locale -->
+  <div class="cookie-banner" id="cookieBanner" style="display: none;">
+    <div class="cookie-content">
+      <div class="cookie-text">
+        <span class="cookie-icon">🍪</span>
+        <div class="cookie-desc">
+          <strong>Gestion des cookies et de votre session</strong>
+          <p>
+            Acceptez-vous l'utilisation des cookies et du stockage local ? En acceptant, votre bande rythmo ainsi que la vidéo choisie seront automatiquement sauvegardées pour que vous puissiez reprendre exactement où vous en étiez lors de votre prochaine visite. Si vous refusez, aucune donnée ne sera mémorisée.
+          </p>
+        </div>
+      </div>
+      <div class="cookie-actions">
+        <button class="btn btn-secondary" id="btnCookieDecline">✕ Refuser</button>
+        <button class="btn btn-primary" id="btnCookieAccept">✓ Accepter et mémoriser</button>
       </div>
     </div>
   </div>

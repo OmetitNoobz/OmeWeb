@@ -109,8 +109,8 @@
   background-color: rgba(180, 150, 230, 0.12);
 }
 
-/* --- Adaptations Mobile Smartphone (< 768px) --- */
-@media (max-width: 768px) {
+/* --- Adaptations Mobile Smartphone & Tablettes (< 768px ou Paysage mobile) --- */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 550px), (orientation: landscape) and (max-width: 950px) {
   body {
     height: 100vh;
     height: 100dvh;
@@ -148,7 +148,7 @@
   }
 
   .mobile-toolbar {
-    display: flex;
+    display: flex !important;
     align-items: center;
     gap: 8px;
   }
@@ -171,9 +171,33 @@
 
   .video-section {
     flex: 0 0 auto;
-    height: 25vh;
-    min-height: 80px;
-    max-height: 30vh;
+    height: 24vh;
+    height: 24dvh;
+    min-height: 70px;
+    max-height: 28vh;
+    max-height: 28dvh;
+  }
+
+  .video-placeholder {
+    padding: 6px 10px;
+    height: 100%;
+  }
+
+  .video-placeholder .icon {
+    font-size: 24px;
+    margin-bottom: 2px;
+  }
+
+  .video-placeholder p {
+    font-size: 11px;
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+
+  .video-placeholder .btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    min-height: 28px;
   }
 
   .resizer-bar {
@@ -182,9 +206,10 @@
 
   .timeline-section {
     flex: 1 1 0;
-    min-height: 100px;
+    min-height: 90px;
     height: auto;
     overflow: hidden;
+    position: relative;
   }
 
   /* Barre tactile de signes (Dubbing Pad) */
@@ -276,12 +301,29 @@
   }
 
   /* Modales adaptées au smartphone */
+  .modal-backdrop {
+    align-items: flex-start;
+    padding-top: max(12px, env(safe-area-inset-top, 12px));
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .modal-content {
     width: 94%;
     max-width: 440px;
+    max-height: 92vh;
+    max-height: 92dvh;
     margin: 0 auto;
     padding: 16px;
     border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .form-input {
@@ -346,16 +388,28 @@
   }
 }
 
-/* --- Mode Paysage sur Smartphone (Orientation Landscape) --- */
-@media (max-height: 520px) and (orientation: landscape) {
+/* --- Mode Paysage sur Smartphone & Tablette (Orientation Landscape) --- */
+@media (orientation: landscape) and (max-height: 550px), (orientation: landscape) and (max-width: 950px) {
   .header {
     height: calc(36px + env(safe-area-inset-top, 0px));
     padding: 0 10px;
     padding-top: env(safe-area-inset-top, 0px);
   }
 
+  .desktop-toolbar {
+    display: none !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-toolbar {
+    display: flex !important;
+  }
+
   .main-workspace {
-    flex-direction: row;
+    flex-direction: row !important;
     flex: 1 1 0;
     min-height: 0;
     height: auto;
@@ -363,50 +417,70 @@
   }
 
   .video-section {
-    width: 44%;
-    height: 100%;
-    min-height: unset;
-    max-height: unset;
+    width: 42% !important;
+    height: 100% !important;
+    min-height: unset !important;
+    max-height: unset !important;
     border-right: 1px solid var(--border-color);
   }
 
+  .video-placeholder {
+    padding: 4px;
+  }
+
+  .video-placeholder .icon {
+    font-size: 20px;
+    margin-bottom: 2px;
+  }
+
+  .video-placeholder p {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+
+  .video-placeholder .btn {
+    padding: 2px 6px;
+    font-size: 10px;
+    min-height: 24px;
+  }
+
   .resizer-bar {
-    display: none;
+    display: none !important;
   }
 
   .timeline-section {
-    width: 56%;
-    height: 100%;
-    min-height: unset;
+    width: 58% !important;
+    height: 100% !important;
+    min-height: unset !important;
   }
 
   /* Afficher aussi la barre de signes en paysage en version compacte */
   .mobile-dubbing-pad {
-    display: flex;
-    height: 36px;
-    min-height: 36px;
+    display: flex !important;
+    height: 34px;
+    min-height: 34px;
     padding: 2px 6px;
     gap: 4px;
   }
 
   .dub-pad-btn {
-    height: 28px;
-    min-height: 28px;
+    height: 26px;
+    min-height: 26px;
     padding: 0 8px;
     font-size: 11px;
   }
 
   .transport-bar {
-    height: calc(38px + env(safe-area-inset-bottom, 0px));
-    min-height: calc(38px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(36px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(36px + env(safe-area-inset-bottom, 0px));
+    padding: 0 6px env(safe-area-inset-bottom, 0px) 6px;
   }
 
   .btn-step,
   .btn-secondary,
   .btn-play-main {
-    min-height: 28px;
-    height: 28px;
+    min-height: 26px;
+    height: 26px;
     padding: 2px 6px;
     font-size: 10px;
   }
@@ -416,4 +490,73 @@
     min-width: 65px;
     padding: 2px 4px;
   }
+
+  .modal-content {
+    padding: 10px 14px;
+  }
+
+  .modal-header {
+    padding: 8px 12px;
+  }
+
+  .modal-body {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .modal-footer {
+    padding: 8px 12px;
+  }
+
+  .form-input {
+    min-height: 36px;
+    font-size: 14px;
+  }
 }
+
+/* --- Adaptation mobile du bandeau cookies --- */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 550px) {
+  .cookie-banner {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) 12px;
+  }
+
+  .cookie-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cookie-text {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .cookie-icon {
+    font-size: 26px;
+  }
+
+  .cookie-desc strong {
+    font-size: 13px;
+  }
+
+  .cookie-desc p {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .cookie-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .cookie-actions .btn {
+    flex: 1;
+    min-height: 36px;
+    font-size: 12px;
+    padding: 6px 10px;
+    text-align: center;
+    justify-content: center;
+  }
+}
+

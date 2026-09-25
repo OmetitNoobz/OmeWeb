@@ -32,12 +32,12 @@ export class TimelineRenderer {
 
     this.canvas.width = Math.round(width * this.dpr);
     this.canvas.height = Math.round(height * this.dpr);
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
 
     // Positionner la barre rouge témoin à ~22% sur smartphone ou 120px sur desktop
     if (width < 500) {
-      this.cursorX = Math.max(60, Math.round(width * 0.22));
+      this.cursorX = Math.max(50, Math.round(width * 0.22));
     } else {
       this.cursorX = 120;
     }
@@ -382,39 +382,62 @@ export class TimelineRenderer {
 
         switch (mark.type) {
           case SeparatorType.START: {
-            // Triangle vert pointant vers le bas (▶ Reprise)
-            const triW = Math.max(10, bandH * 0.22);
-            const triH = Math.max(10, bandH * 0.22);
+            // Ligne verticale verte très visible marquant le début exact (▶ Début)
+            ctx.strokeStyle = '#50dc78';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(sx, bandTop + 2);
+            ctx.lineTo(sx, bandTop + bandH - 2);
+            ctx.stroke();
+
+            // Onglet supérieur (▶ Début)
+            const triW = Math.max(10, Math.min(14, bandH * 0.25));
+            const triH = Math.max(8, Math.min(12, bandH * 0.22));
             ctx.fillStyle = '#50dc78';
             ctx.beginPath();
-            ctx.moveTo(sx, bandTop + bandH - 2);
-            ctx.lineTo(sx - triW / 2, bandTop + bandH - 2 - triH);
-            ctx.lineTo(sx + triW / 2, bandTop + bandH - 2 - triH);
+            ctx.moveTo(sx, bandTop + 2);
+            ctx.lineTo(sx + triW, bandTop + 2);
+            ctx.lineTo(sx, bandTop + 2 + triH);
             ctx.closePath();
             ctx.fill();
 
-            // Bordure contrastée
-            ctx.strokeStyle = '#1e5a32';
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            // Triangle inférieur contrasté
+            ctx.beginPath();
+            ctx.moveTo(sx, bandTop + bandH - 2);
+            ctx.lineTo(sx, bandTop + bandH - 2 - triH);
+            ctx.lineTo(sx + triW, bandTop + bandH - 2);
+            ctx.closePath();
+            ctx.fill();
             break;
           }
 
           case SeparatorType.END: {
-            // Triangle rouge pointant vers le bas (◀ Fin de réplique)
-            const triW = Math.max(10, bandH * 0.22);
-            const triH = Math.max(10, bandH * 0.22);
+            // Ligne verticale rouge éclatante marquant la fin exacte (◀ Fin de réplique)
+            ctx.strokeStyle = '#ff3c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(sx, bandTop + 2);
+            ctx.lineTo(sx, bandTop + bandH - 2);
+            ctx.stroke();
+
+            // Onglet supérieur (◀ Fin)
+            const triW = Math.max(10, Math.min(14, bandH * 0.25));
+            const triH = Math.max(8, Math.min(12, bandH * 0.22));
             ctx.fillStyle = '#ff3c3c';
             ctx.beginPath();
-            ctx.moveTo(sx, bandTop + bandH - 2);
-            ctx.lineTo(sx - triW / 2, bandTop + bandH - 2 - triH);
-            ctx.lineTo(sx + triW / 2, bandTop + bandH - 2 - triH);
+            ctx.moveTo(sx, bandTop + 2);
+            ctx.lineTo(sx - triW, bandTop + 2);
+            ctx.lineTo(sx, bandTop + 2 + triH);
             ctx.closePath();
             ctx.fill();
 
-            ctx.strokeStyle = '#781414';
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            // Triangle inférieur contrasté
+            ctx.beginPath();
+            ctx.moveTo(sx, bandTop + bandH - 2);
+            ctx.lineTo(sx, bandTop + bandH - 2 - triH);
+            ctx.lineTo(sx - triW, bandTop + bandH - 2);
+            ctx.closePath();
+            ctx.fill();
             break;
           }
 

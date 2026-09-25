@@ -12,6 +12,7 @@ import { ShortcutsManager } from './shortcuts.js';
 import { ProjectIO } from './project-io.js';
 import { TextItem, SeparatorType, Role } from './models.js';
 import { VideoFpsDetector } from './video-fps-detector.js';
+import { StorageManager } from './storage-manager.js';
 
 export class OmeRythApp {
   constructor() {
@@ -26,6 +27,7 @@ export class OmeRythApp {
     this.isCreatingNewProject = false;
     this.transcribeTaskId = null;
     this.transcribeInterval = null;
+    this.autoSaveTimer = null;
 
     // Instances principales
     this.textManager = new TextManager(4);
@@ -38,13 +40,19 @@ export class OmeRythApp {
     this.renderer = new TimelineRenderer(this.canvas);
     this.videoSync = new VideoSync(this.videoEl, (time) => this.onTimeUpdate(time));
     this.videoSync.pps = this.pps;
-    this.videoSync.onPlayStateChange = (playing) => this.updatePlayButton(playing);
+    this.videoSync.onPlayStateChange = (playing) => {
+      this.updatePlayButton(playing);
+      if (!playing) this.scheduleAutoSave();
+    };
 
     if (this.videoEl) {
       this.videoEl.addEventListener('error', (e) => this.handleVideoError(e));
     }
 
-    this.touchControls = new TouchControls(this.canvas, this.renderer, this.textManager, this.videoSync, () => this.render());
+    this.touchControls = new TouchControls(this.canvas, this.renderer, this.textManager, this.videoSync, () => {
+      this.render();
+      this.scheduleAutoSave();
+    });
     this.touchControls.onContextMenu = (info) => this.openContextMenuAt(info.worldX, info.bandIdx, info.clientX, info.clientY);
     this.touchControls.onDoubleTap = (worldX, bandIdx) => this.handleDoubleTap(worldX, bandIdx);
     this.touchControls.onTap = (info) => this.handleTap(info.worldX, info.bandIdx);
@@ -52,25 +60,12 @@ export class OmeRythApp {
 
     this.shortcuts = new ShortcutsManager(this);
 
-    // Initialisation du mode de saisie (PC = direct sur bande, Mobile = modale)
-    let initialMode = 'pc';
-    try {
-      const savedMode = localStorage.getItem('omeryth_input_mode');
-      if (savedMode === 'pc' || savedMode === 'mobile') {
-        initialMode = savedMode;
-      } else {
-        const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window && !window.matchMedia('(pointer: fine)').matches);
-        initialMode = isMobile ? 'mobile' : 'pc';
-      }
-    } catch (_) {
-      initialMode = 'pc';
-    }
-    this.inputMode = initialMode;
+    // Initialisation automatique du mode de saisie selon l'appareil détecté (PC direct / Mobile modale)
+    this.inputMode = this.detectInputMode();
     this.inlineEditing = null;
 
     this.initUI();
     this.initLiveBandEditor();
-    this.updateInputModeUI();
     this.initCanvasMouseEvents();
     this.initContextMenu();
     this.initMobileDrawer();
@@ -79,8 +74,9 @@ export class OmeRythApp {
     this.initResizeHandler();
     this.updateFpsBadge();
 
-    // Démarrage propre : ne rien mettre au début par défaut
-    this.render();
+    // Initialisation des cookies, du stockage local et restauration de session
+    this.initCookieAndStorage();
+    this.startupSession();
   }
 
   initUI() {
@@ -207,11 +203,6 @@ export class OmeRythApp {
 
     document.getElementById('btnSave')?.addEventListener('click', () => this.exportProject());
 
-    document.getElementById('btnExportSrt')?.addEventListener('click', () => {
-      ProjectIO.exportSrt(this.textManager, this.pps);
-      this.showToast('Fichier SRT généré !');
-    });
-
     const fileInputProject = document.getElementById('fileInputProject');
     document.getElementById('btnOpen')?.addEventListener('click', () => {
       fileInputProject?.click();
@@ -267,23 +258,12 @@ export class OmeRythApp {
       e.target.value = '';
     });
 
-    // Bouton Démo
-    document.getElementById('btnDemo')?.addEventListener('click', () => {
-      this.loadInitialDemo();
-      this.showToast('Projet de démonstration chargé !');
-    });
-
     // Bouton Rôles
     document.getElementById('btnRoles')?.addEventListener('click', () => this.openRolesModal());
 
     // Bouton Aide
     document.getElementById('btnHelp')?.addEventListener('click', () => {
       document.getElementById('helpModal').classList.add('active');
-    });
-
-    // Bouton Bascule Mode de Saisie (PC direct / Mobile modale)
-    document.getElementById('btnInputMode')?.addEventListener('click', () => {
-      this.toggleInputMode();
     });
 
     // Boutons de la barre mobile supérieure
@@ -419,9 +399,13 @@ export class OmeRythApp {
 
     if (resetTextManager) {
       this.textManager = new TextManager(4);
+      if (this.touchControls) {
+        this.touchControls.textManager = this.textManager;
+      }
       this.setPps(80.0, false);
     }
     this.render();
+    this.scheduleAutoSave();
 
     // Extraction et décodage de la forme d'onde via Web Audio API
     this.waveform.loadFromBlob(file, (pct, msg) => {
@@ -574,6 +558,9 @@ export class OmeRythApp {
           }
         }
       }
+      if (hasMovedSinceDown && (dragMode === 'plan' || dragMode === 'separator')) {
+        this.scheduleAutoSave();
+      }
       isMouseDown = false;
       dragMode = null;
       dragTarget = null;
@@ -660,16 +647,38 @@ export class OmeRythApp {
 
   initResizeHandler() {
     const handleResize = () => {
+      // Détection automatique du mode (PC direct / Mobile modale)
+      this.inputMode = this.detectInputMode();
+
       const container = this.canvas.parentElement;
       if (container) {
-        const w = container.clientWidth;
-        const h = container.clientHeight > 0 ? container.clientHeight : 160;
-        this.renderer.resize(w, h);
-        this.render();
+        const rect = container.getBoundingClientRect();
+        const w = Math.round(rect.width) || container.clientWidth || 320;
+        const h = Math.round(rect.height) || container.clientHeight || 160;
+        if (w > 0 && h > 0) {
+          this.renderer.resize(w, h);
+          this.render();
+        }
       }
     };
 
     window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(handleResize, 80);
+      setTimeout(handleResize, 250);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+    }
+
+    if (window.ResizeObserver && this.canvas.parentElement) {
+      const ro = new ResizeObserver(() => {
+        handleResize();
+      });
+      ro.observe(this.canvas.parentElement);
+    }
+
     setTimeout(handleResize, 50);
   }
 
@@ -743,6 +752,7 @@ export class OmeRythApp {
       }
       this.textManager.addSeparator(bandIdx, currentWorldX, SeparatorType.END);
       this.render();
+      this.scheduleAutoSave();
       this.showToast(`Repère FIN posé à ${this.videoSync.currentTime.toFixed(2)}s`);
       return;
     }
@@ -750,6 +760,7 @@ export class OmeRythApp {
     if (type === 'INNER' || type === SeparatorType.INNER) {
       this.textManager.addSeparator(bandIdx, currentWorldX, SeparatorType.INNER);
       this.render();
+      this.scheduleAutoSave();
       this.showToast(`Séparateur interne posé sur la piste ${bandIdx + 1}`);
       return;
     }
@@ -769,6 +780,7 @@ export class OmeRythApp {
 
     this.textManager.addSeparator(bandIdx, currentWorldX, SeparatorType.INNER, -1, signTypeId);
     this.render();
+    this.scheduleAutoSave();
     this.showToast(`Signe ${signTypeId} posé sur la piste ${bandIdx + 1}`);
   }
 
@@ -776,12 +788,14 @@ export class OmeRythApp {
     const currentWorldX = this.snapWorldXToTenth(this.videoSync.currentTime * this.pps);
     this.textManager.addPlanMarker(currentWorldX);
     this.render();
+    this.scheduleAutoSave();
     this.showToast(`Repère de plan posé à ${this.videoSync.currentTime.toFixed(2)}s`);
   }
 
   undo() {
     if (this.textManager.undo()) {
       this.render();
+      this.scheduleAutoSave();
       this.showToast('Annuler (Undo)');
     }
   }
@@ -789,6 +803,7 @@ export class OmeRythApp {
   redo() {
     if (this.textManager.redo()) {
       this.render();
+      this.scheduleAutoSave();
       this.showToast('Rétablir (Redo)');
     }
   }
@@ -798,6 +813,7 @@ export class OmeRythApp {
       this.textManager.removeTextItem(this.selectedItem);
       this.selectedItem = null;
       this.render();
+      this.scheduleAutoSave();
       this.showToast('Réplique supprimée');
     }
   }
@@ -820,6 +836,7 @@ export class OmeRythApp {
       this.textManager.scaleTimelineX(0, ratio);
     }
     this.render();
+    this.scheduleAutoSave();
   }
 
   promptNewProject() {
@@ -828,6 +845,13 @@ export class OmeRythApp {
         return;
       }
     }
+    this.textManager = new TextManager(4);
+    if (this.touchControls) {
+      this.touchControls.textManager = this.textManager;
+    }
+    this.setPps(80.0, false);
+    this.render();
+    this.scheduleAutoSave();
     this.isCreatingNewProject = true;
     document.getElementById('fileInputMedia')?.click();
   }
@@ -956,6 +980,7 @@ export class OmeRythApp {
     const capturer = document.getElementById('canvasKeyboardCapturer');
     if (capturer) capturer.blur();
     this.render();
+    this.scheduleAutoSave();
     if (item && (item.text || '').trim()) {
       this.showToast(`Réplique enregistrée pour ${item.role?.name || 'Personnage'}`);
     }
@@ -970,39 +995,78 @@ export class OmeRythApp {
     this.showToast('Saisie annulée');
   }
 
-  setInputMode(mode) {
-    this.inputMode = mode === 'mobile' ? 'mobile' : 'pc';
-    try {
-      localStorage.setItem('omeryth_input_mode', this.inputMode);
-    } catch (_) {}
+  detectInputMode() {
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isSmallScreen = window.innerWidth <= 768;
+    const isTouchOnly = ('ontouchstart' in window || navigator.maxTouchPoints > 0) &&
+      !window.matchMedia('(pointer: fine)').matches;
 
-    this.updateInputModeUI();
-    this.showToast(this.inputMode === 'pc' 
-      ? '💻 Mode PC actif : Modification directe du texte sur la bande' 
-      : '📱 Mode Mobile actif : Saisie du texte via modale');
+    return (isMobileUA || isSmallScreen || isTouchOnly) ? 'mobile' : 'pc';
   }
 
-  toggleInputMode() {
-    this.setInputMode(this.inputMode === 'pc' ? 'mobile' : 'pc');
+  ensurePhraseStartSeparator(bandIdx, startX) {
+    if (!this.textManager.bandSeparators.has(bandIdx)) {
+      this.textManager.bandSeparators.set(bandIdx, []);
+    }
+    const list = this.textManager.bandSeparators.get(bandIdx);
+    const existingStart = list.find(s => Math.abs(s.x - startX) <= 6 && s.isStartBoundary());
+    if (!existingStart) {
+      this.textManager.addSeparator(bandIdx, startX, SeparatorType.START, -1, 'DEFAULT', null, false);
+    }
   }
 
-  updateInputModeUI() {
-    const isPc = this.inputMode === 'pc';
-    const btn = document.getElementById('btnInputMode');
-    if (btn) {
-      btn.innerHTML = isPc ? '💻 Mode PC' : '📱 Mode Mobile';
-      btn.title = isPc 
-        ? 'Mode PC : Saisie directe sur la bande (cliquer pour mode Mobile)' 
-        : 'Mode Mobile : Saisie par modale (cliquer pour mode PC)';
-      btn.classList.toggle('active-mode-pc', isPc);
-      btn.classList.toggle('active-mode-mobile', !isPc);
+  ensurePhraseEndSeparator(bandIdx, startX, textContent) {
+    const pps = this.pps || 80;
+    const text = (textContent || '').trim();
+    // Rythme naturel de parole (environ 12 à 15 caractères par seconde)
+    const charDur = Math.max(1, text.length) * 0.08;
+    const estSec = Math.max(1.3, Math.min(3.8, charDur));
+
+    // Largeur visible sur le canvas à droite du curseur
+    const canvasW = this.renderer?.width || 360;
+    const curX = this.renderer?.cursorX || 80;
+    const maxVisiblePx = Math.max(90, canvasW - curX - 25);
+
+    // Distance désirée en pixels, bornée pour rester immédiatement visible sur smartphone
+    const pxDur = Math.min(Math.round(estSec * pps), maxVisiblePx);
+    const desiredEndX = this.snapWorldXToTenth(startX + pxDur);
+
+    if (!this.textManager.bandSeparators.has(bandIdx)) {
+      this.textManager.bandSeparators.set(bandIdx, []);
     }
-    const mBtn = document.getElementById('mBtnInputMode');
-    if (mBtn) {
-      mBtn.innerHTML = isPc 
-        ? '<span class="drawer-icon">💻</span> Mode : Direct sur bande (PC)' 
-        : '<span class="drawer-icon">📱</span> Mode : Fenêtre modale (Mobile)';
+    const list = this.textManager.bandSeparators.get(bandIdx);
+    list.sort((a, b) => a.x - b.x);
+
+    // Trouver le prochain START éventuel après startX
+    const nextStart = list.find(s => s.x > startX + 4 && s.isStartBoundary());
+
+    // Vérifier si un repère END existe DÉJÀ spécifiquement pour CETTE réplique
+    // (doit être après startX, avant le prochain START s'il y en a un, et dans la portée de la phrase)
+    const maxPhraseSpan = nextStart ? (nextStart.x - startX) : Math.max(desiredEndX - startX + 80, Math.round(5.0 * pps));
+    const existingEnd = list.find(s => 
+      s.x > startX + 4 && 
+      s.isEndBoundary() && 
+      (!nextStart || s.x < nextStart.x) &&
+      (s.x - startX <= maxPhraseSpan)
+    );
+
+    if (!existingEnd) {
+      let endX = desiredEndX;
+      const minGap = Math.max(4, Math.round(pps * 0.08));
+
+      if (nextStart && nextStart.x <= endX) {
+        endX = Math.max(startX + minGap, nextStart.x - minGap);
+      }
+      if (endX <= startX) {
+        endX = startX + Math.round(1.0 * pps);
+      }
+
+      this.textManager.addSeparator(bandIdx, endX, SeparatorType.END, -1, 'DEFAULT', null, false);
+      return endX;
     }
+    return existingEnd.x;
   }
 
   openPromptForStart(bandIdx, worldX) {
@@ -1090,27 +1154,18 @@ export class OmeRythApp {
 
     const onSave = () => {
       const trimmed = input.value.trim();
-      if (trimmed) {
-        liveItem.text = trimmed;
-        liveItem.role = this.textManager.getRoleByName(roleSelect.value);
+      const finalText = trimmed || '...';
+      liveItem.text = finalText;
+      liveItem.role = this.textManager.getRoleByName(roleSelect.value);
 
-        // Poser automatiquement un repère END si pas encore de fin sur ce tronçon
-        const bounds = this.textManager.getBoundarySeparators(bandIdx, worldX);
-        if (bounds.rightSep === null || bounds.rightSep <= worldX) {
-          const estimatedDur = Math.max(1.2, trimmed.length * 0.08);
-          const endX = this.snapWorldXToTenth(worldX + estimatedDur * this.pps);
-          this.textManager.addSeparator(bandIdx, endX, SeparatorType.END, -1, 'DEFAULT', null, false);
-        }
+      // Toujours garantir les repères START (▶) et END (◀) pour cette réplique sur mobile
+      this.ensurePhraseStartSeparator(bandIdx, worldX);
+      this.ensurePhraseEndSeparator(bandIdx, worldX, finalText);
 
-        this.textManager.recordSnapshot();
-        this.render();
-        this.showToast(`Réplique enregistrée pour ${liveItem.role?.name || 'Personnage'}`);
-      } else {
-        // Aucun texte : retirer l'élément temporaire, mais préserver le repère START
-        this.textManager.removeTextItem(liveItem, false);
-        this.render();
-        this.showToast('Repère START posé');
-      }
+      this.textManager.recordSnapshot();
+      this.render();
+      this.scheduleAutoSave();
+      this.showToast(`Réplique enregistrée pour ${liveItem.role?.name || 'Personnage'}`);
       cleanup();
     };
 
@@ -1121,9 +1176,24 @@ export class OmeRythApp {
       cleanup();
     };
 
-    if (btnSave) btnSave.onclick = onSave;
-    if (btnCancel) btnCancel.onclick = onCancel;
-    if (btnClose) btnClose.onclick = onCancel;
+    if (btnSave) {
+      btnSave.onclick = (e) => {
+        if (e) e.preventDefault();
+        onSave();
+      };
+    }
+    if (btnCancel) {
+      btnCancel.onclick = (e) => {
+        if (e) e.preventDefault();
+        onCancel();
+      };
+    }
+    if (btnClose) {
+      btnClose.onclick = (e) => {
+        if (e) e.preventDefault();
+        onCancel();
+      };
+    }
 
     input.onkeydown = (e) => {
       if (e.key === 'Enter') {
@@ -1233,13 +1303,20 @@ export class OmeRythApp {
       if (trimmed) {
         textItem.text = trimmed;
         textItem.role = this.textManager.getRoleByName(roleSelect.value);
+
+        // Toujours garantir le repère START (▶) et le repère END (◀) pour cette réplique
+        this.ensurePhraseStartSeparator(textItem.band, textItem.x);
+        this.ensurePhraseEndSeparator(textItem.band, textItem.x, trimmed);
+
         this.textManager.recordSnapshot();
         this.render();
-        this.showToast('Réplique modifiée !');
+        this.scheduleAutoSave();
+        this.showToast('Réplique enregistrée !');
       } else {
         if (confirm('Le texte est vide. Souhaitez-vous supprimer cette réplique ?')) {
           this.textManager.removeTextItem(textItem);
           this.render();
+          this.scheduleAutoSave();
           this.showToast('Réplique supprimée');
         } else {
           textItem.text = originalText;
@@ -1257,9 +1334,24 @@ export class OmeRythApp {
       cleanup();
     };
 
-    if (btnSave) btnSave.onclick = onSave;
-    if (btnCancel) btnCancel.onclick = onCancel;
-    if (btnClose) btnClose.onclick = onCancel;
+    if (btnSave) {
+      btnSave.onclick = (e) => {
+        if (e) e.preventDefault();
+        onSave();
+      };
+    }
+    if (btnCancel) {
+      btnCancel.onclick = (e) => {
+        if (e) e.preventDefault();
+        onCancel();
+      };
+    }
+    if (btnClose) {
+      btnClose.onclick = (e) => {
+        if (e) e.preventDefault();
+        onCancel();
+      };
+    }
 
     input.onkeydown = (e) => {
       if (e.key === 'Enter') {
@@ -1377,6 +1469,7 @@ export class OmeRythApp {
         const startX = this.contextTarget.phraseStartX;
         this.textManager.deletePhraseAtStart(band, startX);
         this.render();
+        this.scheduleAutoSave();
         this.vibrate(40);
         this.showToast('Réplique et repères supprimés');
       }
@@ -1403,11 +1496,13 @@ export class OmeRythApp {
           // Si on supprime le signe de début, cela supprime la phrase
           this.textManager.deletePhraseAtStart(band, sep.x);
           this.render();
+          this.scheduleAutoSave();
           this.vibrate(40);
           this.showToast('Réplique et repères supprimés');
         } else {
           this.textManager.removeSeparator(band, sep.x);
           this.render();
+          this.scheduleAutoSave();
           this.vibrate(25);
           this.showToast('Séparateur supprimé');
         }
@@ -1419,6 +1514,7 @@ export class OmeRythApp {
       if (this.contextTarget?.hitPlan !== null && this.contextTarget?.hitPlan !== undefined) {
         this.textManager.removePlanMarker(this.contextTarget.hitPlan);
         this.render();
+        this.scheduleAutoSave();
         this.vibrate(25);
         this.showToast('Repère de plan supprimé');
       }
@@ -1467,6 +1563,7 @@ export class OmeRythApp {
         }
         this.textManager.addSeparator(bandIdx, curX, SeparatorType.END);
         this.render();
+        this.scheduleAutoSave();
         this.vibrate(25);
         this.showToast('Repère Fin (END) posé');
       }
@@ -1486,6 +1583,7 @@ export class OmeRythApp {
         }
         this.textManager.addSeparator(bandIdx, curX, SeparatorType.INNER);
         this.render();
+        this.scheduleAutoSave();
         this.vibrate(25);
         this.showToast('Séparateur interne posé');
       }
@@ -1497,6 +1595,7 @@ export class OmeRythApp {
         const curX = Math.round(this.contextTarget.worldX / (this.pps * 0.1)) * (this.pps * 0.1);
         this.textManager.addPlanMarker(curX);
         this.render();
+        this.scheduleAutoSave();
         this.vibrate(25);
         this.showToast('Repère de plan posé');
       }
@@ -1630,18 +1729,6 @@ export class OmeRythApp {
       this.exportProject();
     });
 
-    document.getElementById('mBtnExportSrt')?.addEventListener('click', () => {
-      closeDrawer();
-      ProjectIO.exportSrt(this.textManager, this.pps);
-      this.showToast('Fichier SRT généré !');
-    });
-
-    document.getElementById('mBtnDemo')?.addEventListener('click', () => {
-      closeDrawer();
-      this.loadInitialDemo();
-      this.showToast('Projet démo chargé');
-    });
-
     document.getElementById('mBtnRoles')?.addEventListener('click', () => {
       closeDrawer();
       this.openRolesModal();
@@ -1683,16 +1770,194 @@ export class OmeRythApp {
       closeDrawer();
       document.getElementById('helpModal')?.classList.add('active');
     });
+  }
 
-    document.getElementById('mBtnInputMode')?.addEventListener('click', () => {
-      this.toggleInputMode();
-      closeDrawer();
+  // =========================================================================
+  // GESTION DES COOKIES, DU CONSENTEMENT ET DE LA PERSISTANCE (INDEXEDDB)
+  // =========================================================================
+
+  initCookieAndStorage() {
+    const banner = document.getElementById('cookieBanner');
+    const btnAccept = document.getElementById('btnCookieAccept');
+    const btnDecline = document.getElementById('btnCookieDecline');
+    const btnCookiesDesktop = document.getElementById('btnCookies');
+    const btnCookiesMobile = document.getElementById('mBtnCookies');
+
+    const showBanner = () => {
+      if (banner) {
+        banner.style.display = 'block';
+      }
+    };
+
+    const hideBanner = () => {
+      if (banner) {
+        banner.style.display = 'none';
+      }
+    };
+
+    btnAccept?.addEventListener('click', async () => {
+      StorageManager.setConsentStatus('accepted');
+      hideBanner();
+      await this.saveCurrentSession();
+      this.showToast('🍪 Cookies acceptés : votre bande et votre vidéo seront mémorisées !', 3200);
     });
+
+    btnDecline?.addEventListener('click', async () => {
+      StorageManager.setConsentStatus('declined');
+      hideBanner();
+      await StorageManager.clearSession();
+      this.showToast('🍪 Cookies refusés : aucune donnée ne sera sauvegardée.', 3000);
+    });
+
+    btnCookiesDesktop?.addEventListener('click', () => {
+      showBanner();
+    });
+
+    btnCookiesMobile?.addEventListener('click', () => {
+      document.getElementById('mobileDrawerBackdrop')?.classList.remove('active');
+      showBanner();
+    });
+
+    // Afficher la bannière si aucun choix n'a encore été fait
+    const status = StorageManager.getConsentStatus();
+    if (!status) {
+      setTimeout(() => {
+        showBanner();
+      }, 400);
+    }
+
+    // Auto-sauvegarde sur départ ou masquage de l'onglet
+    window.addEventListener('beforeunload', () => {
+      this.saveCurrentSession();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.saveCurrentSession();
+      }
+    });
+  }
+
+  async startupSession() {
+    let restored = false;
+    if (StorageManager.hasConsent()) {
+      restored = await this.restoreSavedSession();
+    }
+    if (!restored) {
+      this.loadInitialDemo();
+    }
+  }
+
+  scheduleAutoSave() {
+    if (!StorageManager.hasConsent()) return;
+    clearTimeout(this.autoSaveTimer);
+    this.autoSaveTimer = setTimeout(() => {
+      this.saveCurrentSession();
+    }, 600);
+  }
+
+  async saveCurrentSession() {
+    if (!StorageManager.hasConsent()) return false;
+    try {
+      const projectData = {
+        version: 'RHYTHMO_V5',
+        video: this.currentMediaFile?.name || null,
+        bandCount: this.textManager.bandCount,
+        pixelsPerSecond: this.pps,
+        roles: this.textManager.roles.map(r => ({
+          name: r.name,
+          color: Role.hexToInt(r.color)
+        })),
+        texts: this.textManager.texts.map(t => ({
+          text: t.text,
+          x: t.x,
+          band: t.band,
+          role: t.role ? t.role.name : ''
+        })),
+        separators: [],
+        planMarkers: [...this.textManager.planMarkers]
+      };
+
+      for (const [band, seps] of this.textManager.bandSeparators.entries()) {
+        for (const s of seps) {
+          projectData.separators.push({
+            band: band,
+            x: s.x,
+            type: s.type,
+            splitIndex: s.splitIndex,
+            signType: s.signType || 'DEFAULT',
+            rawDetxType: s.rawDetxType || ''
+          });
+        }
+      }
+
+      await StorageManager.saveSession({
+        project: projectData,
+        videoBlob: this.currentMediaFile || null,
+        videoName: this.currentMediaFile?.name || null,
+        videoType: this.currentMediaFile?.type || null,
+        videoLastModified: this.currentMediaFile?.lastModified || null,
+        currentTime: this.videoSync.currentTime || 0,
+        pps: this.pps
+      });
+      return true;
+    } catch (e) {
+      console.warn('[AutoSave] Erreur lors de la sauvegarde :', e);
+      return false;
+    }
+  }
+
+  async restoreSavedSession() {
+    if (!StorageManager.hasConsent()) return false;
+    try {
+      const saved = await StorageManager.loadSession();
+      if (!saved || !saved.project) return false;
+
+      // 1. Restaurer le projet rythmo
+      const projectJson = JSON.stringify(saved.project);
+      const meta = ProjectIO.importRythmo(projectJson, this.textManager);
+
+      if (meta && typeof meta.pixelsPerSecond === 'number' && meta.pixelsPerSecond > 0) {
+        this.setPps(meta.pixelsPerSecond, false);
+      } else if (typeof saved.pps === 'number' && saved.pps > 0) {
+        this.setPps(saved.pps, false);
+      }
+
+      // 2. Restaurer le média vidéo / audio si stocké
+      if (saved.videoBlob) {
+        const videoFile = (saved.videoBlob instanceof File)
+          ? saved.videoBlob
+          : new File([saved.videoBlob], saved.videoName || 'video_sauvegardee.mp4', {
+              type: saved.videoType || 'video/mp4',
+              lastModified: saved.videoLastModified || Date.now()
+            });
+
+        await this.loadMediaFile(videoFile, false);
+        if (typeof saved.currentTime === 'number' && saved.currentTime > 0) {
+          this.videoSync.seekTo(saved.currentTime);
+        }
+        this.showToast(`✨ Session restaurée : bande & vidéo "${saved.videoName || 'vidéo'}" retrouvées !`, 3200);
+      } else if (saved.project.video) {
+        this.updatePlaceholderForProject('Session restaurée', saved.project.video);
+        this.showToast(`✨ Bande rythmo restaurée ! Vidéo attendue : ${saved.project.video}`, 3000);
+      } else {
+        this.showToast('✨ Bande rythmo restaurée depuis votre dernière session !', 2500);
+      }
+
+      this.render();
+      return true;
+    } catch (err) {
+      console.warn('[OmeRythApp] Erreur restauration session :', err);
+      return false;
+    }
   }
 
   loadInitialDemo() {
     // Projet d'exemple immédiat et interactif
     this.textManager = new TextManager(4);
+    if (this.touchControls) {
+      this.touchControls.textManager = this.textManager;
+    }
     const pps = this.pps;
 
     const rNarrateur = this.textManager.roles[0];
