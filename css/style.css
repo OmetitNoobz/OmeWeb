@@ -203,18 +203,31 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
+  background-color: #050508;
+  overflow: hidden;
 }
 
 #videoPlayer {
+  width: 100%;
+  height: 100%;
   max-height: 100%;
   max-width: 100%;
+  object-fit: contain;
   outline: none;
   display: none;
+  background-color: #000;
 }
 
 .video-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   color: var(--text-muted);
+  width: 100%;
+  height: 100%;
+  padding: 20px;
 }
 
 .video-placeholder .icon {
@@ -263,6 +276,37 @@ body {
   height: 100%;
   touch-action: none; /* Désactive les gestes natifs du navigateur sur le canvas */
   cursor: crosshair;
+}
+
+/* --- Bouton Toggle Mode de Saisie (PC / Mobile) --- */
+.btn-mode-toggle {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-mode-toggle:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: #64748b;
+  color: #fff;
+}
+
+.btn-mode-toggle.active-mode-pc {
+  border-color: rgba(36, 202, 68, 0.6);
+  background: rgba(36, 202, 68, 0.14);
+  color: #4ade80;
+  box-shadow: 0 0 10px rgba(36, 202, 68, 0.2);
+}
+
+.btn-mode-toggle.active-mode-mobile {
+  border-color: rgba(56, 189, 248, 0.6);
+  background: rgba(56, 189, 248, 0.14);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 
 /* --- Barre de transport (Footer) --- */
@@ -320,6 +364,26 @@ body {
   border-radius: 6px;
   font-size: 12px;
   outline: none;
+}
+
+.btn-fps {
+  background-color: #1a1a24;
+  border: 1px solid #363648;
+  color: var(--accent-gold);
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-fps:hover {
+  background-color: #262638;
+  border-color: var(--accent-gold);
+  color: #fff;
 }
 
 /* --- Modales --- */

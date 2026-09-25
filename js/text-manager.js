@@ -21,6 +21,16 @@ export class TextManager {
     this.undoStack = [];
     this.redoStack = [];
     this.maxHistory = 60;
+
+    // État d'édition dynamique en direct sur la bande rythmo (Desktop OmeRyth)
+    this.isEditing = false;
+    this.editingText = null;
+    this.editingBand = -1;
+    this.cursorIndex = 0;
+    this.caretVisible = false;
+    this.originalEditingText = '';
+    this.isNewPhraseBeingCreated = false;
+
     this.initBands();
   }
 
@@ -175,22 +185,142 @@ export class TextManager {
     const idx = list.findIndex(m => Math.abs(m.x - x) <= 6);
     if (idx !== -1) {
       if (record) this.recordSnapshot();
+      const mark = list[idx];
+      // Si c'est un START, supprimer ou détacher le TextItem associé
+      if (mark.isStartBoundary()) {
+        const textIdx = this.texts.findIndex(t => t.band === band && Math.abs(t.x - mark.x) <= 35);
+        if (textIdx !== -1) {
+          this.texts.splice(textIdx, 1);
+        }
+      }
       list.splice(idx, 1);
       return true;
     }
     return false;
   }
 
-  moveSeparator(band, oldX, newX) {
+  /**
+   * Règle d'ensemble OmeRyth :
+   * Empêche toute collision ou inversion d'ordre entre séparateurs lors du glissement.
+   * Un séparateur FIN ne peut jamais dépasser ou être placé derrière le DÉBUT,
+   * avec un écart minimal de sécurité (minGap = 0.08s).
+   */
+  clampSeparatorMove(band, currentX, desiredX, pps = 80) {
+    const separators = this.bandSeparators.get(band);
+    if (!separators || separators.length <= 1) {
+      return desiredX;
+    }
+
+    const minGap = Math.max(2, Math.round(pps * 0.08));
+
+    if (desiredX > currentX) {
+      let nextSeparatorX = Infinity;
+      for (const sep of separators) {
+        if (sep.x > currentX && sep.x < nextSeparatorX) {
+          nextSeparatorX = sep.x;
+        }
+      }
+      return Math.min(desiredX, nextSeparatorX - minGap);
+    } else if (desiredX < currentX) {
+      let prevSeparatorX = -Infinity;
+      for (const sep of separators) {
+        if (sep.x < currentX && sep.x > prevSeparatorX) {
+          prevSeparatorX = sep.x;
+        }
+      }
+      return Math.max(desiredX, prevSeparatorX + minGap);
+    }
+
+    return desiredX;
+  }
+
+  moveSeparator(band, oldX, newX, pps = 80) {
     const list = this.bandSeparators.get(band);
     if (!list) return false;
     const item = list.find(m => m.x === oldX);
-    if (item) {
-      item.x = Math.round(newX);
-      list.sort((a, b) => a.x - b.x);
-      return true;
+    if (!item) return false;
+
+    // Application stricte de la règle de non-inversion
+    const clampedX = this.clampSeparatorMove(band, oldX, Math.round(newX), pps);
+    if (clampedX === item.x && oldX === clampedX) return false;
+
+    item.x = clampedX;
+
+    // Si c'est un START, déplacer également le TextItem lié pour garder l'alignement
+    if (item.isStartBoundary()) {
+      const textItem = this.texts.find(t => t.band === band && t.x === oldX);
+      if (textItem) {
+        textItem.x = clampedX;
+      }
     }
-    return false;
+
+    list.sort((a, b) => a.x - b.x);
+    return true;
+  }
+
+  /**
+   * Vérifie la conformité avec les règles fondamentales d'OmeRyth :
+   * - Un signe FIN ne peut pas être derrière le signe DÉBUT.
+   * - Un signe FIN nécessite un repère DÉBUT préalable.
+   * - Pas de superposition de séparateurs.
+   * - Les répliques ne peuvent pas se chevaucher.
+   */
+  canAddSeparator(band, x, type = SeparatorType.START) {
+    const list = this.bandSeparators.get(band) || [];
+
+    // Pas de superposition exacte
+    const exist = list.find(m => Math.abs(m.x - x) <= 4);
+    if (exist) {
+      return { allowed: false, error: 'Un repère existe déjà à cet endroit.' };
+    }
+
+    // Règles pour repère FIN (END)
+    if (type === SeparatorType.END) {
+      let lastStart = null;
+      for (let i = list.length - 1; i >= 0; i--) {
+        const s = list[i];
+        if (s.isStartBoundary() && s.x <= x) {
+          lastStart = s;
+          break;
+        }
+      }
+
+      if (!lastStart) {
+        const nextStart = list.find(s => s.isStartBoundary() && s.x > x);
+        if (nextStart) {
+          return { allowed: false, error: 'Règle OmeRyth : Un signe FIN ne peut pas être derrière le signe DÉBUT !' };
+        }
+        return { allowed: false, error: 'Impossible de poser un repère FIN : aucun repère DÉBUT préalable sur cette piste.' };
+      }
+
+      if (x <= lastStart.x) {
+        return { allowed: false, error: 'Règle OmeRyth : Un signe FIN ne peut pas être derrière le signe DÉBUT !' };
+      }
+
+      // Vérifier si un repère FIN existe déjà entre ce DÉBUT et la position demandée
+      const existingEnd = list.find(s => s.x > lastStart.x && s.x <= x && s.isEndBoundary());
+      if (existingEnd) {
+        return { allowed: false, error: 'Cette réplique possède déjà un repère FIN.' };
+      }
+    }
+
+    // Règles pour repère DÉBUT (START)
+    if (type === SeparatorType.START) {
+      const phrase = this.findPhraseInfoAt(band, x);
+      if (phrase && x > phrase.startX && x < phrase.endX) {
+        return { allowed: false, error: 'Impossible de poser un DÉBUT : position à l\'intérieur d\'une réplique existante.' };
+      }
+    }
+
+    // Règles pour repère INTERNE (INNER)
+    if (type === SeparatorType.INNER) {
+      const bounds = this.getBoundarySeparators(band, x);
+      if (bounds.leftSep === null || bounds.rightSep === null || x <= bounds.leftSep || x >= bounds.rightSep) {
+        return { allowed: false, error: 'Un repère interne doit être placé entre un repère DÉBUT et un repère FIN.' };
+      }
+    }
+
+    return { allowed: true };
   }
 
   findSeparatorAt(band, worldX, tolerance = 10) {
@@ -399,5 +529,243 @@ export class TextManager {
     }
     this.roles.push(role);
     return role;
+  }
+
+  // --- Mise à l'échelle temporelle (Zoom & Synchronisation PPS) ---
+  scaleTimelineX(anchorX = 0, ratio = 1.0) {
+    if (ratio <= 0 || Math.abs(ratio - 1.0) < 1e-6) return;
+
+    for (const t of this.texts) {
+      t.x = Math.round(anchorX + (t.x - anchorX) * ratio);
+    }
+
+    for (const seps of this.bandSeparators.values()) {
+      for (const s of seps) {
+        s.x = Math.round(anchorX + (s.x - anchorX) * ratio);
+      }
+      seps.sort((a, b) => a.x - b.x);
+    }
+
+    this.planMarkers = this.planMarkers.map(x => Math.round(anchorX + (x - anchorX) * ratio));
+    this.planMarkers.sort((a, b) => a - b);
+
+    // Mettre à l'échelle l'historique Undo / Redo
+    this.scaleSnapshots(this.undoStack, anchorX, ratio);
+    this.scaleSnapshots(this.redoStack, anchorX, ratio);
+  }
+
+  scaleSnapshots(stack, anchorX, ratio) {
+    if (!Array.isArray(stack)) return;
+    for (const s of stack) {
+      if (Array.isArray(s.texts)) {
+        for (const t of s.texts) {
+          t.x = Math.round(anchorX + (t.x - anchorX) * ratio);
+        }
+      }
+      if (Array.isArray(s.separators)) {
+        for (const sep of s.separators) {
+          sep.x = Math.round(anchorX + (sep.x - anchorX) * ratio);
+        }
+        s.separators.sort((a, b) => a.x - b.x);
+      }
+      if (Array.isArray(s.planMarkers)) {
+        for (let i = 0; i < s.planMarkers.length; i++) {
+          s.planMarkers[i] = Math.round(anchorX + (s.planMarkers[i] - anchorX) * ratio);
+        }
+        s.planMarkers.sort((a, b) => a - b);
+      }
+    }
+  }
+
+  // =========================================================================
+  // ÉDITION DYNAMIQUE DIRECTE SUR LA BANDE (Reproduction fidèle d'OmeRyth Desktop)
+  // Le texte s'étire et se met à jour en temps réel directement sur le canvas
+  // =========================================================================
+
+  /**
+   * Démarre une nouvelle réplique directement sur la bande :
+   * - Place le repère START
+   * - Crée le TextItem vide
+   * - Active le curseur clignotant sur la bande
+   */
+  startPhrase(band, worldX, role = null) {
+    const check = this.canAddSeparator(band, worldX, SeparatorType.START);
+    if (!check.allowed) {
+      return { allowed: false, error: check.error };
+    }
+
+    this.recordSnapshot();
+    this.addSeparator(band, worldX, SeparatorType.START, -1, 'DEFAULT', null, false);
+
+    const activeRole = role || this.roles[0] || new Role('Narrateur', '#4ECDC4');
+    const item = new TextItem('', worldX, band, activeRole);
+    this.texts.push(item);
+
+    this.isEditing = true;
+    this.editingText = item;
+    this.editingBand = band;
+    this.cursorIndex = 0;
+    this.caretVisible = true;
+    this.originalEditingText = '';
+    this.isNewPhraseBeingCreated = true;
+
+    return { allowed: true, textItem: item };
+  }
+
+  /**
+   * Ouvre une réplique existante en mode édition dynamique directe sur la bande.
+   */
+  startEditingExistingText(textItem, cursorIdx = null) {
+    if (!textItem) return;
+    this.recordSnapshot();
+    this.isEditing = true;
+    this.editingText = textItem;
+    this.editingBand = textItem.band;
+    this.originalEditingText = textItem.text || '';
+    this.isNewPhraseBeingCreated = false;
+
+    const len = (textItem.text || '').length;
+    this.cursorIndex = cursorIdx !== null ? Math.max(0, Math.min(len, cursorIdx)) : len;
+    this.caretVisible = true;
+  }
+
+  /**
+   * Met à jour dynamiquement la chaîne du texte en cours d'édition
+   * (appelé instantanément à chaque frappe de touche ou saisie).
+   */
+  setEditingTextValue(newText, newCursorIdx) {
+    if (!this.isEditing || !this.editingText) return;
+    this.editingText.text = newText;
+    const len = (newText || '').length;
+    this.cursorIndex = Math.max(0, Math.min(len, newCursorIdx !== undefined ? newCursorIdx : len));
+    this.caretVisible = true;
+  }
+
+  /**
+   * Calcule avec précision l'indice de caractère correspondant à un clic souris
+   * sur le texte déformé élastiquement sur la bande (même algorithme qu'OmeRyth Desktop).
+   */
+  getCursorIndexForClick(t, mouseX, offsetX) {
+    if (!t) return 0;
+    const text = t.text || '';
+    const len = text.length;
+    if (len === 0) return 0;
+
+    const bounds = this.getBoundarySeparators(t.band, t.x);
+    const segmentStart = bounds.leftSep !== null ? bounds.leftSep : t.x;
+    const segmentEnd = bounds.rightSep !== null ? bounds.rightSep : segmentStart + Math.max(100, len * 20);
+
+    const worldX = mouseX - offsetX;
+    if (worldX <= segmentStart) return 0;
+    if (worldX >= segmentEnd) return len;
+
+    const innerMarks = bounds.innerMarks;
+    if (!innerMarks || innerMarks.length === 0) {
+      const availWidth = Math.max(1, segmentEnd - segmentStart);
+      const ratio = Math.max(0, Math.min(1, (worldX - segmentStart) / availWidth));
+      return Math.min(len, Math.max(0, Math.round(ratio * len)));
+    } else {
+      let prevX = segmentStart;
+      let prevIdx = 0;
+      for (const mark of innerMarks) {
+        const segStart = prevX;
+        const segEnd = mark.x;
+        let idx = mark.splitIndex >= 0 ? mark.splitIndex : Math.round(((mark.x - segmentStart) / Math.max(1, segmentEnd - segmentStart)) * len);
+        if (idx < prevIdx) idx = prevIdx;
+        if (idx > len) idx = len;
+
+        if (worldX <= segEnd) {
+          const segWidth = Math.max(1, segEnd - segStart);
+          const ratio = Math.max(0, Math.min(1, (worldX - segStart) / segWidth));
+          return prevIdx + Math.min(idx - prevIdx, Math.max(0, Math.round(ratio * (idx - prevIdx))));
+        }
+        prevX = mark.x;
+        prevIdx = idx;
+      }
+      const segWidth = Math.max(1, segmentEnd - prevX);
+      const ratio = Math.max(0, Math.min(1, (worldX - prevX) / segWidth));
+      return prevIdx + Math.min(len - prevIdx, Math.max(0, Math.round(ratio * (len - prevIdx))));
+    }
+  }
+
+  /**
+   * Bascule le rôle de la réplique en cours d'édition vers le rôle suivant.
+   */
+  cycleEditingRole() {
+    if (!this.isEditing || !this.editingText || this.roles.length === 0) return null;
+    const curIdx = this.roles.findIndex(r => r.name.toLowerCase() === (this.editingText.role?.name || '').toLowerCase());
+    const nextIdx = (curIdx + 1) % this.roles.length;
+    this.editingText.role = this.roles[nextIdx];
+    return this.editingText.role;
+  }
+
+  /**
+   * Valide la saisie sur la bande :
+   * - Si le texte est vide et qu'il s'agissait d'une nouvelle réplique, l'annule proprement.
+   * - Si aucun repère de fin END n'est posé, en place un automatiquement de manière sécurisée.
+   */
+  commitEditing(pps = 80) {
+    if (!this.isEditing || !this.editingText) return;
+    const text = (this.editingText.text || '').trim();
+
+    if (!text && this.isNewPhraseBeingCreated) {
+      this.cancelEditing();
+      return;
+    }
+
+    if (this.isNewPhraseBeingCreated) {
+      const bounds = this.getBoundarySeparators(this.editingBand, this.editingText.x);
+      if (bounds.rightSep === null) {
+        const durationSec = Math.max(1.0, Math.min(6.0, text.length * 0.14));
+        const desiredEnd = this.editingText.x + Math.round(durationSec * pps);
+
+        const list = this.bandSeparators.get(this.editingBand) || [];
+        const nextSep = list.find(s => s.x > this.editingText.x);
+        let endX = desiredEnd;
+        const minGap = Math.max(2, Math.round(pps * 0.08));
+
+        if (nextSep) {
+          endX = Math.min(desiredEnd, nextSep.x - minGap);
+        }
+        if (endX > this.editingText.x + minGap) {
+          this.addSeparator(this.editingBand, endX, SeparatorType.END, -1, 'DEFAULT', null, false);
+        }
+      }
+    }
+
+    this.stopEditing();
+  }
+
+  /**
+   * Annule l'édition en cours :
+   * - Si c'était une nouvelle réplique non confirmée, supprime le texte et le repère START.
+   * - Si c'était une réplique existante, rétablit le texte initial.
+   */
+  cancelEditing() {
+    if (!this.isEditing || !this.editingText) return;
+
+    if (this.isNewPhraseBeingCreated) {
+      const idx = this.texts.indexOf(this.editingText);
+      if (idx !== -1) {
+        this.texts.splice(idx, 1);
+      }
+      this.removeSeparator(this.editingBand, this.editingText.x, false);
+    } else {
+      this.editingText.text = this.originalEditingText;
+    }
+
+    this.stopEditing();
+  }
+
+  /**
+   * Quitte le mode d'édition active et masque le curseur de texte.
+   */
+  stopEditing() {
+    this.isEditing = false;
+    this.editingText = null;
+    this.editingBand = -1;
+    this.cursorIndex = 0;
+    this.caretVisible = false;
+    this.isNewPhraseBeingCreated = false;
   }
 }

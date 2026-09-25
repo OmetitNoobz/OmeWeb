@@ -92,7 +92,12 @@ export class ProjectIO {
       textManager.planMarkers = data.planMarkers.map(x => Math.round(x)).sort((a, b) => a - b);
     }
 
-    return true;
+    return {
+      success: true,
+      bandCount: data.bandCount,
+      pixelsPerSecond: (typeof data.pixelsPerSecond === 'number' && data.pixelsPerSecond > 0) ? data.pixelsPerSecond : null,
+      video: typeof data.video === 'string' && data.video.trim() !== '' ? data.video.trim() : null
+    };
   }
 
   /**

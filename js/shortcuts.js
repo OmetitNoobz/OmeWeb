@@ -14,7 +14,15 @@ export class ShortcutsManager {
     window.addEventListener('keydown', (e) => {
       if (!this.enabled) return;
 
-      // Ne pas intercepter les touches si l'utilisateur écrit dans un champ texte (input, textarea)
+      // Ne pas intercepter les touches si l'utilisateur écrit dans un champ texte ou directement sur la bande
+      if (this.app.textManager && this.app.textManager.isEditing) {
+        const capturer = document.getElementById('canvasKeyboardCapturer');
+        if (capturer && document.activeElement !== capturer) {
+          capturer.focus({ preventScroll: true });
+        }
+        return;
+      }
+
       const targetTag = e.target.tagName.toLowerCase();
       if (targetTag === 'input' || targetTag === 'textarea' || e.target.isContentEditable) {
         if (e.key === 'Escape') {

@@ -24,14 +24,14 @@
 
     <!-- Groupes d'outils Desktop -->
     <div class="toolbar-group desktop-toolbar">
-      <button class="btn btn-sm" id="btnNew" title="Nouveau projet">📄 Nouveau</button>
+      <button class="btn btn-sm" id="btnNew" title="Nouveau projet avec vidéo">📄 Nouveau</button>
       <button class="btn btn-sm" id="btnOpen" title="Ouvrir un projet .rythmo">📂 Ouvrir</button>
       <button class="btn btn-sm btn-primary" id="btnSave" title="Sauvegarder le projet (Ctrl+S)">💾 Sauvegarder</button>
-      <button class="btn btn-sm" id="btnLoadMedia" title="Charger un fichier vidéo ou audio local">🎬 Média</button>
       <button class="btn btn-sm btn-accent-transcribe" id="btnTranscribe" title="Transcription IA (Non disponible pour l'instant)">🎙️ Transcrire</button>
       <button class="btn btn-sm" id="btnRoles" title="Gestion des personnages et couleurs">🎭 Rôles</button>
       <button class="btn btn-sm" id="btnExportSrt" title="Exporter les répliques en sous-titres SRT">📝 SRT</button>
       <button class="btn btn-sm" id="btnDemo" title="Charger un projet d'exemple">⚡ Démo</button>
+      <button class="btn btn-sm btn-mode-toggle active-mode-pc" id="btnInputMode" title="Mode de saisie : PC (direct sur bande) ou Mobile (modale)">💻 Mode PC</button>
     </div>
 
     <div class="toolbar-group desktop-toolbar">
@@ -46,14 +46,14 @@
 
     <!-- Groupes d'outils Mobile -->
     <div class="toolbar-group mobile-toolbar">
-      <button class="btn btn-sm btn-primary" id="btnMobileMedia" title="Charger un média">🎬 Média</button>
+      <button class="btn btn-sm btn-primary" id="btnMobileNew" title="Nouveau projet avec vidéo">📄 Nouveau</button>
       <button class="btn btn-sm btn-accent-transcribe" id="btnMobileTranscribe" title="Transcription IA (Non disponible pour l'instant)">🎙️</button>
       <button class="btn btn-sm" id="btnMobileSave" title="Sauvegarder">💾</button>
       <button class="btn btn-sm" id="btnMobileMenu" title="Menu des options">☰</button>
     </div>
 
     <!-- Inputs fichiers masqués -->
-    <input type="file" id="fileInputProject" accept=".rythmo,.json" style="display: none;">
+    <input type="file" id="fileInputProject" accept=".rythmo,.json,video/*,audio/*,.mkv,.mp4,.webm,.mp3,.wav" multiple style="display: none;">
     <input type="file" id="fileInputMedia" accept="video/*,audio/*,.mkv,.mp4,.webm,.mp3,.wav" style="display: none;">
   </header>
 
@@ -65,8 +65,8 @@
         <video id="videoPlayer" playsinline webkit-playsinline preload="auto"></video>
         <div class="video-placeholder" id="videoPlaceholder">
           <div class="icon">🎬</div>
-          <p>Glissez-déposez une vidéo ou cliquez sur <strong>Média</strong> pour commencer</p>
-          <button class="btn btn-sm btn-primary" onclick="document.getElementById('fileInputMedia').click()">Charger une vidéo locale</button>
+          <p id="placeholderText">Glissez-déposez une vidéo ou cliquez sur <strong>Nouveau</strong> pour commencer</p>
+          <button class="btn btn-sm btn-primary" id="btnPlaceholderAction" onclick="document.getElementById('fileInputMedia').click()">Choisir une vidéo</button>
         </div>
       </div>
     </section>
@@ -77,8 +77,11 @@
     </div>
 
     <!-- Zone Bande Rythmo (Canvas 60 FPS) -->
-    <section class="timeline-section">
+    <section class="timeline-section" id="timelineSection">
       <canvas id="timelineCanvas"></canvas>
+
+      <!-- Capteur de saisie clavier invisible pour écriture directe sur la bande (Mode PC) -->
+      <input type="text" id="canvasKeyboardCapturer" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position: fixed; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; width: 1px; height: 1px;">
     </section>
   </main>
 
@@ -98,6 +101,7 @@
   <footer class="transport-bar">
     <div class="transport-controls timecode-group">
       <div class="timecode-box" id="timecodeDisplay">00:00:00:00</div>
+      <button class="btn-fps" id="btnToggleFps" title="Cadence d'images (Cliquer pour basculer 24 / 60 IPS)">60 IPS</button>
       <select class="select-control" id="selectSpeed" title="Vitesse de lecture">
         <option value="0.5">0.5x</option>
         <option value="0.75">0.75x</option>
@@ -291,6 +295,34 @@
     </div>
   </div>
 
+  <!-- Modal Demande Vidéo pour Projet .rythmo -->
+  <div class="modal-backdrop modal" id="videoPromptModal">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">🎬</span>
+          <h3 id="videoPromptTitle">Associer une vidéo au projet</h3>
+        </div>
+        <button class="modal-close" id="btnCloseVideoPromptModal">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center; padding: 20px 15px;">
+        <p id="videoPromptProjectName" style="color: var(--accent-blue); font-weight: 600; font-size: 15px; margin-bottom: 6px;">Projet chargé</p>
+        <p id="videoPromptExpected" style="color: var(--text-muted); font-size: 13px; margin-bottom: 18px;">Vidéo attendue : <span id="videoPromptExpectedName" style="color: var(--accent-gold); font-family: monospace;">-</span></p>
+        
+        <p style="font-size: 14px; margin-bottom: 20px; line-height: 1.5;">Pour synchroniser la bande rythmo avec l'image, veuillez sélectionner le fichier vidéo correspondant :</p>
+        
+        <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+          <button class="btn btn-primary" id="btnChoosePromptVideo" style="padding: 10px 24px; font-size: 15px; width: 100%; max-width: 320px;">
+            📁 Choisir la vidéo
+          </button>
+          <button class="btn" id="btnSkipPromptVideo" style="color: var(--text-muted); font-size: 13px;">
+            Continuer sans vidéo (bande seule)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Menu contextuel flottant (Clic droit sur desktop ou appui long sur smartphone) -->
   <div class="custom-context-menu" id="contextMenu">
     <div class="cmenu-header" id="cmenuHeader">Options</div>
@@ -341,10 +373,9 @@
       </div>
       <div class="mobile-drawer-body">
         <div class="drawer-section-title">PROJET</div>
-        <button class="drawer-item" id="mBtnNew"><span class="drawer-icon">📄</span> Nouveau projet vierge</button>
+        <button class="drawer-item" id="mBtnNew"><span class="drawer-icon">📄</span> Nouveau projet (choisir vidéo)</button>
         <button class="drawer-item" id="mBtnOpen"><span class="drawer-icon">📂</span> Ouvrir projet (.rythmo)</button>
         <button class="drawer-item" id="mBtnSave"><span class="drawer-icon">💾</span> Sauvegarder projet</button>
-        <button class="drawer-item" id="mBtnMedia"><span class="drawer-icon">🎬</span> Charger Média (Vidéo / Audio)</button>
         <button class="drawer-item highlight-transcribe" id="mBtnTranscribe"><span class="drawer-icon">🎙️</span> Transcription Vocale IA (Bientôt disponible)</button>
         <button class="drawer-item" id="mBtnExportSrt"><span class="drawer-icon">📝</span> Exporter en sous-titres SRT</button>
         <button class="drawer-item" id="mBtnDemo"><span class="drawer-icon">⚡</span> Charger projet Démo</button>
@@ -359,6 +390,9 @@
           <button class="btn" id="mBtnZoomOut">🔍- Zoom arrière</button>
           <button class="btn" id="mBtnZoomIn">🔍+ Zoom avant</button>
         </div>
+
+        <div class="drawer-section-title">MODE DE SAISIE</div>
+        <button class="drawer-item" id="mBtnInputMode"><span class="drawer-icon">💻</span> Mode : Direct sur bande (PC)</button>
 
         <div class="drawer-section-title">AIDE</div>
         <button class="drawer-item" id="mBtnHelp"><span class="drawer-icon">❓</span> Guide & Raccourcis</button>

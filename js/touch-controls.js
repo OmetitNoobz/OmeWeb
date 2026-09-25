@@ -13,6 +13,7 @@ export class TouchControls {
     this.onContextMenu = null;
     this.onDoubleTap = null;
     this.onTap = null;
+    this.onZoom = null;
 
     this.isDragging = false;
     this.dragMode = 'scrub'; // 'scrub', 'separator', 'plan'
@@ -27,6 +28,7 @@ export class TouchControls {
     this.initialTime = 0;
     this.initialPps = 80;
     this.initialDistance = 0;
+    this.lastDistance = 0;
 
     // Détection appui long (Context Menu sur mobile) & Double tap
     this.longPressTimer = null;
@@ -145,6 +147,7 @@ export class TouchControls {
       const p1 = this.getTouchPos(e.touches[0]);
       const p2 = this.getTouchPos(e.touches[1]);
       this.initialDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      this.lastDistance = this.initialDistance;
       this.initialPps = this.videoSync.pps || 80;
     }
   }
@@ -178,7 +181,7 @@ export class TouchControls {
       } else if (this.dragMode === 'separator' && this.dragTarget !== null) {
         const offsetX = this.renderer.cursorX - (this.videoSync.currentTime * pps);
         const newWorldX = Math.round((pos.x - offsetX) / (pps * 0.1)) * (pps * 0.1);
-        this.textManager.moveSeparator(this.dragBand, this.dragTarget.x, newWorldX);
+        this.textManager.moveSeparator(this.dragBand, this.dragTarget.x, newWorldX, pps);
       }
 
       if (this.onUpdate) this.onUpdate();
@@ -189,11 +192,14 @@ export class TouchControls {
       const p2 = this.getTouchPos(e.touches[1]);
       const currentDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
 
-      if (this.initialDistance > 10) {
-        const ratio = currentDist / this.initialDistance;
-        const newPps = Math.max(30, Math.min(this.initialPps * ratio, 240));
-        this.videoSync.pps = newPps;
-        if (this.onUpdate) this.onUpdate();
+      if (this.lastDistance > 10 && currentDist > 10) {
+        const factor = currentDist / this.lastDistance;
+        if (Math.abs(factor - 1.0) > 0.015) {
+          if (this.onZoom) {
+            this.onZoom(factor);
+          }
+          this.lastDistance = currentDist;
+        }
       }
     }
   }
