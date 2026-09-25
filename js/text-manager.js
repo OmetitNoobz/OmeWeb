@@ -361,15 +361,15 @@ export class TextManager {
       }
     }
 
-    // Trouver le END le plus proche à droite (>= itemX)
+    // Trouver le END le plus proche à droite (> itemX)
     for (let i = 0; i < list.length; i++) {
       const s = list[i];
-      if (s.x < itemX) continue;
+      if (s.x <= itemX) continue;
       if (s.isEndBoundary()) {
         rightSep = s.x;
         break;
       }
-      if (s.isStartBoundary() && s.x > itemX) {
+      if (s.isStartBoundary()) {
         break; // Nouvelle réplique commence à droite
       }
     }

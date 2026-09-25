@@ -288,29 +288,46 @@ export class TimelineRenderer {
           let prevX = segmentStart;
           let prevIdx = 0;
           const len = textContent.length;
+          let anyDrawn = false;
 
           for (const mark of bounds.innerMarks) {
             const segStart = prevX;
             const segEnd = mark.x;
+            if (segEnd <= segStart) continue;
+
             let idx = mark.splitIndex >= 0 ? mark.splitIndex : Math.round(((mark.x - segmentStart) / Math.max(1, segmentEnd - segmentStart)) * len);
+            if (idx <= prevIdx || idx > len) {
+              idx = Math.round(((mark.x - segmentStart) / Math.max(1, segmentEnd - segmentStart)) * len);
+            }
             if (idx < prevIdx) idx = prevIdx;
             if (idx > len) idx = len;
 
             const sub = textContent.substring(prevIdx, idx);
-            const subScreenStart = segStart + offsetX;
-            const subWidth = Math.max(10, segEnd - segStart);
-
-            this.drawScaledText(ctx, sub, subScreenStart, baselineY, subWidth, targetTextHeight, false);
+            if (sub.length > 0) {
+              const subScreenStart = segStart + offsetX;
+              const subWidth = Math.max(10, segEnd - segStart);
+              this.drawScaledText(ctx, sub, subScreenStart, baselineY, subWidth, targetTextHeight, false);
+              anyDrawn = true;
+            }
 
             prevX = mark.x;
             prevIdx = idx;
           }
 
           // Dernier morceau après la dernière marque interne
-          const lastSub = textContent.substring(prevIdx);
-          const lastScreenStart = prevX + offsetX;
-          const lastWidth = Math.max(10, segmentEnd - prevX);
-          this.drawScaledText(ctx, lastSub, lastScreenStart, baselineY, lastWidth, targetTextHeight, false);
+          const lastSub = textContent.substring(Math.min(prevIdx, len));
+          if (lastSub.length > 0) {
+            const lastScreenStart = prevX + offsetX;
+            const lastWidth = Math.max(10, segmentEnd - prevX);
+            this.drawScaledText(ctx, lastSub, lastScreenStart, baselineY, lastWidth, targetTextHeight, false);
+            anyDrawn = true;
+          }
+
+          // Filet de sécurité anti-texte fantôme : si rien n'a pu être dessiné, tracer le texte entier
+          if (!anyDrawn && textContent.length > 0) {
+            const availWidth = Math.max(20, segmentEnd - segmentStart);
+            this.drawScaledText(ctx, textContent, screenStart, baselineY, availWidth, targetTextHeight, false);
+          }
         }
       }
 
