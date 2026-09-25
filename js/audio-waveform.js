@@ -113,32 +113,47 @@ export class AudioWaveform {
     const centerY = startY + trackHeight / 2;
     const maxHalfHeight = (trackHeight * 0.45);
 
-    ctx.beginPath();
-    let first = true;
+    // Réduction par colonne de pixel pour conserver l'enveloppe crête exacte sans saturer le Canvas
+    const points = [];
+    let lastPixelX = -999999;
+    let maxPeakInPixel = 0;
 
-    // Tracé supérieur
     for (let i = startIndex; i <= endIndex; i++) {
       const time = i / this.pointsPerSecond;
       const screenX = time * pps + offsetX;
+      const pixelX = Math.round(screenX);
       const peak = this.peaks[i];
-      const barH = peak * maxHalfHeight;
-      const topY = centerY - barH;
 
-      if (first) {
-        ctx.moveTo(screenX, centerY);
-        first = false;
+      if (pixelX === lastPixelX && points.length > 0) {
+        if (peak > maxPeakInPixel) {
+          maxPeakInPixel = peak;
+          points[points.length - 1].peak = peak;
+        }
+      } else {
+        lastPixelX = pixelX;
+        maxPeakInPixel = peak;
+        points.push({ x: screenX, peak });
       }
-      ctx.lineTo(screenX, topY);
+    }
+
+    if (points.length === 0) {
+      ctx.restore();
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, centerY);
+
+    // Tracé supérieur
+    for (let i = 0; i < points.length; i++) {
+      const topY = centerY - points[i].peak * maxHalfHeight;
+      ctx.lineTo(points[i].x, topY);
     }
 
     // Tracé inférieur (symétrique)
-    for (let i = endIndex; i >= startIndex; i--) {
-      const time = i / this.pointsPerSecond;
-      const screenX = time * pps + offsetX;
-      const peak = this.peaks[i];
-      const barH = peak * maxHalfHeight;
-      const bottomY = centerY + barH;
-      ctx.lineTo(screenX, bottomY);
+    for (let i = points.length - 1; i >= 0; i--) {
+      const bottomY = centerY + points[i].peak * maxHalfHeight;
+      ctx.lineTo(points[i].x, bottomY);
     }
 
     ctx.closePath();

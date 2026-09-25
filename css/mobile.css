@@ -135,7 +135,8 @@
     font-size: 15px;
   }
 
-  .brand-tag {
+  .brand-tag,
+  .btn-omeweb {
     display: none;
   }
 

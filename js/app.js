@@ -683,9 +683,11 @@ export class OmeRythApp {
   }
 
   onTimeUpdate(currentTime) {
-    const tcDisplay = document.getElementById('timecodeDisplay');
-    if (tcDisplay) {
-      tcDisplay.textContent = this.videoSync.formatTimecode(currentTime);
+    if (!this.tcDisplay) {
+      this.tcDisplay = document.getElementById('timecodeDisplay');
+    }
+    if (this.tcDisplay) {
+      this.tcDisplay.textContent = this.videoSync.formatTimecode(currentTime);
     }
     this.render();
   }

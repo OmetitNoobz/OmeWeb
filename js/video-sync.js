@@ -12,6 +12,7 @@ export class VideoSync {
     this.mediaDuration = 0;
     this.currentTime = 0;
     this.rafId = null;
+    this.rvfcId = null;
     this.onPlayStateChange = null;
 
     this.initEvents();
@@ -83,17 +84,43 @@ export class VideoSync {
 
   startLoop() {
     this.stopLoop();
-    const tick = () => {
-      if (this.isPlaying) {
-        this.currentTime = this.video.currentTime;
-        if (this.onFrame) this.onFrame(this.currentTime);
-        this.rafId = requestAnimationFrame(tick);
-      }
-    };
-    this.rafId = requestAnimationFrame(tick);
+
+    // Si le navigateur supporte requestVideoFrameCallback (Chrome, Edge, Safari 15.4+, Opera),
+    // on synchronise le rafraîchissement directement avec les images décodées par le GPU.
+    const hasRVFC = typeof this.video.requestVideoFrameCallback === 'function';
+
+    if (hasRVFC && this.video.readyState >= 2) {
+      const onVideoFrame = (now, metadata) => {
+        if (this.isPlaying) {
+          this.currentTime = (metadata && typeof metadata.mediaTime === 'number')
+            ? metadata.mediaTime
+            : this.video.currentTime;
+          if (this.onFrame) this.onFrame(this.currentTime);
+          this.rvfcId = this.video.requestVideoFrameCallback(onVideoFrame);
+        }
+      };
+      this.rvfcId = this.video.requestVideoFrameCallback(onVideoFrame);
+    } else {
+      const tick = () => {
+        if (this.isPlaying) {
+          this.currentTime = this.video.currentTime;
+          if (this.onFrame) this.onFrame(this.currentTime);
+          this.rafId = requestAnimationFrame(tick);
+        }
+      };
+      this.rafId = requestAnimationFrame(tick);
+    }
   }
 
   stopLoop() {
+    if (this.rvfcId !== null && typeof this.video.cancelVideoFrameCallback === 'function') {
+      try {
+        this.video.cancelVideoFrameCallback(this.rvfcId);
+      } catch (e) {
+        // Ignorer
+      }
+      this.rvfcId = null;
+    }
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;

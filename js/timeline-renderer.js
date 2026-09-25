@@ -23,6 +23,31 @@ export class TimelineRenderer {
 
     // Polices
     this.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+    // Caches haute performance pour fluidité 60 FPS
+    this._measureCache = new Map();
+    this._lumaCache = new Map();
+  }
+
+  /**
+   * Mesure de largeur de texte avec cache ultra-rapide O(1)
+   * Évite les appels synchrones répétés à ctx.measureText() qui saturent le GPU/CPU
+   */
+  getTextWidth(ctx, text, font = null) {
+    if (!text) return 0;
+    const cacheKey = font || ctx.font || 'default';
+    let fontMap = this._measureCache.get(cacheKey);
+    if (!fontMap) {
+      fontMap = new Map();
+      this._measureCache.set(cacheKey, fontMap);
+    }
+    let w = fontMap.get(text);
+    if (w === undefined) {
+      if (fontMap.size > 2000) fontMap.clear();
+      w = ctx.measureText(text).width;
+      fontMap.set(text, w);
+    }
+    return w;
   }
 
   resize(width, height) {
@@ -104,23 +129,29 @@ export class TimelineRenderer {
   }
 
   drawBands(ctx, bandCount, bandH, headerH, width) {
+    // 1. Fonds des bandes
     for (let b = 0; b < bandCount; b++) {
       const y = headerH + b * bandH;
-      // Rayures alternées élégantes
       ctx.fillStyle = b % 2 === 0 ? '#1f1f24' : '#19191d';
       ctx.fillRect(0, y, width, bandH);
+    }
 
-      // Ligne séparatrice de bande
-      ctx.strokeStyle = '#2b2b32';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, y + bandH);
-      ctx.lineTo(width, y + bandH);
-      ctx.stroke();
+    // 2. Lignes séparatrices groupées en un seul tracé
+    ctx.strokeStyle = '#2b2b32';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let b = 0; b < bandCount; b++) {
+      const lineY = headerH + (b + 1) * bandH;
+      ctx.moveTo(0, lineY);
+      ctx.lineTo(width, lineY);
+    }
+    ctx.stroke();
 
-      // Numéro de bande discret à gauche
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
-      ctx.font = `600 11px ${this.fontFamily}`;
+    // 3. Numéros de bande
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+    ctx.font = `600 11px ${this.fontFamily}`;
+    for (let b = 0; b < bandCount; b++) {
+      const y = headerH + b * bandH;
       ctx.fillText(`${b + 1}`, 10, y + bandH / 2 + 4);
     }
   }
@@ -142,46 +173,75 @@ export class TimelineRenderer {
     const startTenth = Math.floor(minTime * 10);
     const endTenth = Math.ceil(maxTime * 10);
 
+    // Groupage des tracés pour réduire les appels GPU de 95%
+    const tenthMarks = [];
+    const halfMarks = [];
+    const secMarks = [];
+    const labels = [];
+
     for (let t = startTenth; t <= endTenth; t++) {
       const timeSec = t / 10;
       const screenX = timeSec * pps + offsetX;
       if (screenX < -20 || screenX > width + 20) continue;
 
-      const isSecond = t % 10 === 0;
-      const isHalfSecond = t % 5 === 0;
-
-      if (isSecond) {
-        // Trait pleine seconde
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(screenX, headerH - 12);
-        ctx.lineTo(screenX, headerH);
-        ctx.stroke();
-
-        // Texte timecode (MM:SS)
+      if (t % 10 === 0) {
+        secMarks.push(screenX);
         const mins = Math.floor(timeSec / 60);
         const secs = Math.floor(timeSec % 60);
         const tc = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        ctx.fillStyle = '#e0e0e6';
-        ctx.font = `500 11px monospace`;
-        ctx.fillText(tc, screenX + 4, headerH - 4);
-      } else if (isHalfSecond) {
-        // Demi-seconde
-        ctx.strokeStyle = '#777785';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(screenX, headerH - 7);
-        ctx.lineTo(screenX, headerH);
-        ctx.stroke();
+        labels.push({ tc, x: screenX + 4 });
+      } else if (t % 5 === 0) {
+        halfMarks.push(screenX);
       } else {
-        // Dixième de seconde
-        ctx.strokeStyle = '#444450';
-        ctx.lineWidth = 0.75;
-        ctx.beginPath();
-        ctx.moveTo(screenX, headerH - 4);
-        ctx.lineTo(screenX, headerH);
-        ctx.stroke();
+        tenthMarks.push(screenX);
+      }
+    }
+
+    // 1. Dixièmes de seconde (1 seul stroke)
+    if (tenthMarks.length > 0) {
+      ctx.strokeStyle = '#444450';
+      ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      for (let i = 0; i < tenthMarks.length; i++) {
+        const sx = tenthMarks[i];
+        ctx.moveTo(sx, headerH - 4);
+        ctx.lineTo(sx, headerH);
+      }
+      ctx.stroke();
+    }
+
+    // 2. Demi-secondes (1 seul stroke)
+    if (halfMarks.length > 0) {
+      ctx.strokeStyle = '#777785';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < halfMarks.length; i++) {
+        const sx = halfMarks[i];
+        ctx.moveTo(sx, headerH - 7);
+        ctx.lineTo(sx, headerH);
+      }
+      ctx.stroke();
+    }
+
+    // 3. Secondes pleines (1 seul stroke)
+    if (secMarks.length > 0) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < secMarks.length; i++) {
+        const sx = secMarks[i];
+        ctx.moveTo(sx, headerH - 12);
+        ctx.lineTo(sx, headerH);
+      }
+      ctx.stroke();
+    }
+
+    // 4. Libellés timecodes (MM:SS)
+    if (labels.length > 0) {
+      ctx.fillStyle = '#e0e0e6';
+      ctx.font = '500 11px monospace';
+      for (let i = 0; i < labels.length; i++) {
+        ctx.fillText(labels[i].tc, labels[i].x, headerH - 4);
       }
     }
   }
@@ -279,14 +339,13 @@ export class TimelineRenderer {
 
     if (!innerMarks || innerMarks.length === 0) {
       const availWidth = Math.max(20, segmentEnd - segmentStart);
-      const metrics = ctx.measureText(text);
-      const totalWidth = metrics.width;
+      const totalWidth = this.getTextWidth(ctx, text);
       if (totalWidth <= 0) return segmentStart + offsetX;
       let scaleX = availWidth / totalWidth;
       scaleX = Math.max(0.05, Math.min(scaleX, 15.0));
 
       const sub = text.substring(0, safeCursor);
-      const subWidth = ctx.measureText(sub).width;
+      const subWidth = this.getTextWidth(ctx, sub);
       return (segmentStart + offsetX) + (subWidth * scaleX);
     } else {
       let prevX = segmentStart;
@@ -302,13 +361,13 @@ export class TimelineRenderer {
         if (safeCursor <= idx) {
           const segText = text.substring(prevIdx, idx);
           const segWidth = Math.max(10, segEnd - segStart);
-          const totalWidth = ctx.measureText(segText).width;
+          const totalWidth = this.getTextWidth(ctx, segText);
           if (totalWidth <= 0) return segStart + offsetX;
           let scaleX = segWidth / totalWidth;
           scaleX = Math.max(0.05, Math.min(scaleX, 15.0));
 
           const sub = text.substring(prevIdx, safeCursor);
-          const subWidth = ctx.measureText(sub).width;
+          const subWidth = this.getTextWidth(ctx, sub);
           return (segStart + offsetX) + (subWidth * scaleX);
         }
 
@@ -319,13 +378,13 @@ export class TimelineRenderer {
       // Dernier segment après la dernière marque
       const segText = text.substring(prevIdx);
       const segWidth = Math.max(10, segmentEnd - prevX);
-      const totalWidth = ctx.measureText(segText).width;
+      const totalWidth = this.getTextWidth(ctx, segText);
       if (totalWidth <= 0) return prevX + offsetX;
       let scaleX = segWidth / totalWidth;
       scaleX = Math.max(0.05, Math.min(scaleX, 15.0));
 
       const sub = text.substring(prevIdx, safeCursor);
-      const subWidth = ctx.measureText(sub).width;
+      const subWidth = this.getTextWidth(ctx, sub);
       return (prevX + offsetX) + (subWidth * scaleX);
     }
   }
@@ -334,10 +393,10 @@ export class TimelineRenderer {
     ctx.save();
     const badgeFont = `bold 11px ${this.fontFamily}`;
     ctx.font = badgeFont;
-    const metrics = ctx.measureText(role.name);
+    const textW = this.getTextWidth(ctx, role.name, badgeFont);
     const padX = 7;
     const padY = 3;
-    const bw = metrics.width + padX * 2;
+    const bw = textW + padX * 2;
     const bh = 18;
     const bx = screenX - bw - 6;
     const by = bandTop + 4;
@@ -354,8 +413,7 @@ export class TimelineRenderer {
 
   drawScaledText(ctx, text, anchorX, baselineY, targetWidth, targetHeight, anchoredRight = false) {
     if (!text || text.length === 0) return;
-    const metrics = ctx.measureText(text);
-    const sourceWidth = metrics.width;
+    const sourceWidth = this.getTextWidth(ctx, text);
     if (sourceWidth <= 0) return;
 
     let scaleX = targetWidth > 0 ? targetWidth / sourceWidth : 1.0;
@@ -582,12 +640,17 @@ export class TimelineRenderer {
 
   isDark(hexColor) {
     if (!hexColor || !hexColor.startsWith('#')) return false;
+    let cached = this._lumaCache.get(hexColor);
+    if (cached !== undefined) return cached;
+
     const clean = hexColor.replace('#', '');
     const r = parseInt(clean.substring(0, 2), 16) || 0;
     const g = parseInt(clean.substring(2, 4), 16) || 0;
     const b = parseInt(clean.substring(4, 6), 16) || 0;
     const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-    return luma < 120;
+    const isDarkRes = luma < 120;
+    this._lumaCache.set(hexColor, isDarkRes);
+    return isDarkRes;
   }
 
   drawVideoEndBoundary(ctx, mediaDuration, offsetX, width, pps, headerH, height) {
@@ -608,9 +671,10 @@ export class TimelineRenderer {
 
       // Badge rouge "FIN VIDÉO"
       ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-      ctx.font = `bold 10px ${this.fontFamily}`;
+      const badgeFont = `bold 10px ${this.fontFamily}`;
+      ctx.font = badgeFont;
       const badgeText = 'FIN VIDÉO';
-      const textW = ctx.measureText(badgeText).width;
+      const textW = this.getTextWidth(ctx, badgeText, badgeFont);
       ctx.fillRect(endX + 4, headerH + 6, textW + 8, 16);
       ctx.fillStyle = '#ffffff';
       ctx.fillText(badgeText, endX + 8, headerH + 18);
